@@ -72,6 +72,27 @@ def test_log_score_appends_rows(tmp_path):
         metrics.log_score(path, model="x", features="a", split="s", metric="m", value=1, colour="red")
 
 
+def test_log_score_dirty_flag_ignores_the_log_itself(tmp_path):
+    import subprocess
+
+    git = lambda *a: subprocess.run(["git", *a], cwd=tmp_path, check=True, capture_output=True)  # noqa: E731
+    git("init", "-q")
+    git("config", "user.email", "t@example.org")
+    git("config", "user.name", "t")
+    (tmp_path / "code.py").write_text("x = 1")
+    log = tmp_path / "results" / "score_log.csv"
+    log.parent.mkdir()
+    log.write_bytes((",".join(metrics.LOG_COLUMNS) + chr(10)).encode())
+    git("add", "-A")
+    git("commit", "-q", "-m", "start")
+    kw = dict(model="m", features="f", split="s", metric="rms_factor", value=1.0)
+    first = metrics.log_score(log, **kw)
+    second = metrics.log_score(log, **kw)                      # the log is now modified, which must not count
+    assert first["dirty"] == "no" and second["dirty"] == "no" and len(first["commit"]) == 40
+    (tmp_path / "code.py").write_text("x = 2")
+    assert metrics.log_score(log, **kw)["dirty"] == "yes"
+
+
 def test_shipped_score_log_has_the_header_only():
     from pathlib import Path
 

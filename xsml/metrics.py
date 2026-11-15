@@ -97,7 +97,7 @@ LOG_COLUMNS = ["timestamp", "commit", "dirty", "model", "features", "split", "me
 
 def _git(args: list[str], cwd: Path) -> str:
     try:
-        return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+        return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True).stdout.rstrip()
     except Exception:
         return ""
 
@@ -108,7 +108,8 @@ def log_score(path: Path | str = "results/score_log.csv", **fields) -> dict:
     Required fields: ``model``, ``features``, ``split``, ``metric``, ``value``. Optional: ``ci_low``, ``ci_high``,
     ``n_groups``, ``n_points``, ``declared`` (``"protocol"`` for the one score a protocol allows, ``"extra"`` for any
     other run; default ``"extra"``) and ``notes``. ``features`` may be a list of column names. The timestamp (UTC),
-    the git commit of the working directory and whether it had uncommitted changes are added automatically.
+    the git commit of the repository holding the log and whether tracked files other than the log had uncommitted
+    changes (``dirty``) are added automatically.
     Every score that is computed is logged, including the ones that are not reported.
     """
     required = ["model", "features", "split", "metric", "value"]
@@ -122,16 +123,23 @@ def log_score(path: Path | str = "results/score_log.csv", **fields) -> dict:
     fields.setdefault("declared", "extra")
     if fields["declared"] not in ("protocol", "extra"):
         raise ValueError("declared must be 'protocol' or 'extra'")
+    path.parent.mkdir(parents=True, exist_ok=True)
     cwd = path.resolve().parent
+    top = _git(["rev-parse", "--show-toplevel"], cwd)
+    changed = [line[3:].strip('"') for line in _git(["status", "--porcelain", "--untracked-files=no"], top or cwd).splitlines()]
+    try:
+        own = path.resolve().relative_to(Path(top).resolve()).as_posix() if top else ""
+    except ValueError:
+        own = ""
+    dirty = any(c != own for c in changed)                       # the log itself does not count as an uncommitted change
     row = {"timestamp": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "commit": _git(["rev-parse", "HEAD"], cwd) or "unknown",
-           "dirty": {True: "yes", False: "no"}[bool(_git(["status", "--porcelain", "--untracked-files=no"], cwd))], **fields}
+           "dirty": "yes" if dirty else "no", **fields}
     new = not path.exists() or path.stat().st_size == 0
     if not new:
         with open(path, newline="", encoding="utf-8") as f:
             header = next(csv.reader(f))
         if header != LOG_COLUMNS:
             raise ValueError(f"{path} has another header than expected: {header}")
-    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=LOG_COLUMNS, restval="", lineterminator="\n")
         if new:
