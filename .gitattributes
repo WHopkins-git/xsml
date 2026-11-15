@@ -1,0 +1,3 @@
+* text=auto
+*.csv -text
+data/mass_1.mas20.txt -text

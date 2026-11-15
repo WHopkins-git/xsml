@@ -133,7 +133,7 @@ def log_score(path: Path | str = "results/score_log.csv", **fields) -> dict:
             raise ValueError(f"{path} has another header than expected: {header}")
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=LOG_COLUMNS, restval="")
+        w = csv.DictWriter(f, fieldnames=LOG_COLUMNS, restval="", lineterminator="\n")
         if new:
             w.writeheader()
         w.writerow(row)
