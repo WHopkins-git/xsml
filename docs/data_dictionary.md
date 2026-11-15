@@ -32,11 +32,62 @@ expect extreme values (kept energies range from 6e-10 eV to 4e11 eV, kept cross 
 |---|---|---|
 | `projectile` | text | `n`, `p`, `d`, `t`, `he3`, `a` (alpha) or `g` (photon). |
 | `Z`, `A` | integer | Proton number and mass number of the target. |
-| `MT` | integer | ENDF reaction number assigned by X4Pro: 1 total, 2 elastic, 4 (z,n) or inelastic, 16 (z,2n), 18 fission, 102 (z,gamma), 103 (z,p), 107 (z,alpha), and others. 9000 and above are production cross sections and other quantities without a standard ENDF number. |
+| `MT` | integer | Reaction number assigned by the X4Pro database, copied unchanged. A convenience label: the `reaction` string is the authority. See "MT and projectile" below. |
 | `MF` | integer | ENDF file number assigned by X4Pro (3 for almost all kept rows). |
-| `reaction` | text | Full EXFOR reaction string, including the product nucleus, for example `17-CL-35(N,P)16-S-35,,SIG`. |
+| `reaction` | text | Full EXFOR reaction string, including the product nucleus, for example `17-CL-35(N,P)16-S-35,,SIG`. This string defines what was measured. |
 | `product_state` | text | Qualifier of the product: empty for the unqualified reaction, otherwise for example `G` (ground state), `M` (isomer), or a marker of another restriction. Rows with different product states of one reaction are different quantities. |
 | `sf5`, `sf8`, `sf9` | text or null | Modifier fields of the EXFOR reaction string (branch, modifier, data type). Null means the field is empty. All kept rows have an empty `sf5`. |
+
+## MT and projectile
+
+`MT` is not computed by the linter or by this repository. It is the number that X4Pro attaches to each dataset
+and is passed through unchanged. Its meaning was checked against the reaction strings of all kept rows:
+
+* For the standard numbers, `MT` describes the **outgoing particles**, whatever the projectile. MT 4 is "one
+  neutron out": inelastic scattering `(N,INL)` for a neutron, but `(P,N)` for a proton and `(A,N)` for an alpha.
+  MT 103 is "one proton out": `(N,P)` for a neutron, `(D,P)` for a deuteron, and inelastic scattering `(P,INL)` for
+  a proton. MT 102 is "photon only": `(N,G)`, `(P,G)`.
+* MT 1 (total), 2 (elastic), 3 (nonelastic or absorption), 18 (fission) and 101 (neutron absorption) are sums
+  over channels and have no single product.
+* MT 9000 collects quantities without an ENDF number: for charged particles and photons almost always a
+  production cross section `(z,X)` of a named residual product, for neutrons mostly `(N,SCT)`. **Rows with
+  MT 9000 on one target are many different reactions.** They are told apart only by the product in `reaction`.
+* A few datasets carry a number that does not match their string (12 kept rows of `(D,INL)` are filed under
+  MT 103).
+* Rows to which X4Pro gave no number (MT 0; 188,536 rows) are all among the rows the linter did not keep.
+
+For the 438,511 kept rows whose reaction string fixes the outgoing particles, the product nucleus named in
+the string equals the residual nucleus implied by the projectile and those particles in every row, and the MT
+label implies the same particles in all but the 12 rows above.
+
+Kept rows by projectile and MT, with the main EXFOR process code that the label stands for (the larger labels
+only; cells with fewer than 150 rows are left empty):
+
+| MT | n | p | d | a | he3 | t | g |
+|---|---|---|---|---|---|---|---|
+| 1 | `N,TOT` 2,314,557 | | | | | | `G,TOT` 2,243 |
+| 2 | `N,EL` 7,755 | | | | | | `G,EL` 660 |
+| 3 | `N,NON` 356 | `P,NON` 775 | | `A,NON` 157 | | | `G,ABS` 2,740 |
+| 4 | `N,INL` 37,892 | `P,N` 24,679 | `D,N` 3,001 | `A,N` 21,101 | `HE3,N` 1,180 | | `G,N` 3,209 |
+| 16 | `N,2N` 10,827 | `P,2N` 3,171 | `D,2N` 2,767 | `A,2N` 4,204 | `HE3,2N` 947 | | `G,2N` 1,542 |
+| 17 | `N,3N` 541 | `P,3N` 2,650 | `D,3N` 559 | `A,3N` 2,440 | `HE3,3N` 671 | | `G,3N` 535 |
+| 18 | `N,F` 540,566 | `P,F` 4,261 | `D,F` 654 | `A,F` 1,352 | `HE3,F` 212 | | `G,F` 2,120 |
+| 37 | `N,4N` 155 | `P,4N` 1,270 | `D,4N` 422 | `A,4N` 919 | `HE3,4N` 321 | | |
+| 101 | `N,ABS` 7,611 | | | | | | |
+| 102 | `N,G` 244,162 | `P,G` 6,145 | `D,G` 243 | `A,G` 1,249 | | | |
+| 103 | `N,P` 13,385 | `P,INL` 372 | `D,P` 4,123 (and `D,INL` 12) | `A,P` 1,370 | `HE3,P` 268 | `T,P` 1,292 | `G,P` 673 |
+| 105 | `N,T` 2,146 | | `D,T` 251 | | | | |
+| 107 | `N,A` 16,651 | `P,A` 3,253 | `D,A` 1,142 | | `HE3,A` 227 | `T,A` 593 | |
+| 9000 | `N,SCT` 21,331, `N,X` 1,634 | `P,X` 15,470 | `D,X` 3,620 | `A,X` 8,612 | `HE3,X` 1,902 | `T,X` 469 | `G,X` 12,280, `G,SCT` 1,066 |
+
+Consequences for use:
+
+* Select a reaction by projectile, target and `MT` for the standard channels, then **check the `reaction`
+  strings of what was selected** (`df.reaction.value_counts()`).
+* For a production cross section of a particular nuclide (for example a medical isotope made with protons),
+  select on the `reaction` string and on `product_state`; `MT` alone is not enough.
+* `features.reaction_q` reads the outgoing particles from the `reaction` string when that column is present
+  and returns NaN where the string does not fix them (totals, fission, `(z,X)`, scattering sums).
 
 ## Measurement
 

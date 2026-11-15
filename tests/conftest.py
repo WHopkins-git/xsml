@@ -23,7 +23,7 @@ def toy_table() -> pd.DataFrame:
                 dropped = i == 3 and j == 0
                 rows.append({"dataset": f"9{i:04d}{mt:03d}", "entry": f"9{i:04d}", "subentry": f"9{i:04d}{mt:03d}", "author": f"Author{i}", "year": 1960 + 5 * i,
                              "reference": "J,TOY,1,1,1960", "doi": None, "entry_date": f"{1970 + 5 * i}-01-01", "projectile": "n", "Z": z, "A": a, "MT": mt, "MF": 3,
-                             "reaction": "toy", "product_state": "", "sf5": None, "sf8": None, "sf9": None, "energy_eV": e, "sigma_b": 10 ** log_s,
+                             "reaction": f"{z}-XX-{a}({'N,P' if mt == 103 else 'N,G'}),,SIG", "product_state": "", "sf5": None, "sf8": None, "sf9": None, "energy_eV": e, "sigma_b": 10 ** log_s,
                              "unc_b": 0.05 * 10 ** log_s, "keep": not dropped, "reason": "class rule" if dropped else "kept",
                              "ds_flag": "ok", "ds_offset_dex": 0.0, "ds_weight": 1.0, "pt_outlier": False, "missing_uncertainty": False,
                              "relative_uncertainty_flag": False, "uncertainty_unit_error": False, "critique_kind": "", "energy_frame": ""})

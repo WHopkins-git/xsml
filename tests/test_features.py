@@ -72,7 +72,69 @@ def test_append_keeps_rows_and_adds_reaction_q(toy):
 
 
 def test_reaction_q_other_projectiles_and_unknown_mt():
-    df = pd.DataFrame({"projectile": ["p", "n", "n", "n"], "Z": [16, 17, 17, 17], "A": [35, 35, 35, 35], "MT": [4, 1, 2, 4]})
+    df = pd.DataFrame({"projectile": ["p", "n", "n", "n"], "Z": [16, 17, 17, 17], "A": [35, 35, 35, 35], "MT": [4, 1, 2, 4]})   # no reaction column: MT route
     q = features.reaction_q(df)
     assert q.iloc[0] == pytest.approx(-0.615025, abs=1e-6)       # S-35(p,n)Cl-35 is the inverse of Cl-35(n,p)S-35
     assert np.isnan(q.iloc[1]) and q.iloc[2] == 0 and q.iloc[3] == 0
+
+
+# mass excesses (keV) copied from data/mass_1.mas20.txt for the charged-particle checks
+D2 = 13135.722895
+NI63, NI64, NI65, CU64, CU65, CO61, ZN67 = -65512.891, -67099.034, -65125.796, -65424.418, -67263.677, -62898.179, -67880.376
+ZN68, GA68, MO100, TC99 = -70007.154, -67086.054, -86193.029, -87327.869
+
+
+def _frame(rows):
+    return pd.DataFrame(rows, columns=["projectile", "Z", "A", "MT", "reaction"])
+
+
+def test_reaction_q_charged_particles_and_photons_by_hand():
+    df = _frame([
+        ("p", 28, 64, 4, "28-NI-64(P,N)29-CU-64,,SIG"),
+        ("p", 30, 68, 4, "30-ZN-68(P,N)31-GA-68,,SIG"),
+        ("p", 42, 100, 16, "42-MO-100(P,2N)43-TC-99,,SIG"),
+        ("p", 28, 64, 102, "28-NI-64(P,G)29-CU-65,,SIG"),
+        ("p", 28, 64, 107, "28-NI-64(P,A)27-CO-61,,SIG"),
+        ("d", 28, 64, 103, "28-NI-64(D,P)28-NI-65,,SIG"),
+        ("a", 28, 64, 4, "28-NI-64(A,N)30-ZN-67,,SIG"),
+        ("g", 28, 64, 4, "28-NI-64(G,N)28-NI-63,,SIG"),
+    ])
+    by_hand = [(NI64 + H - CU64 - N), (ZN68 + H - GA68 - N), (MO100 + H - TC99 - 2 * N), (NI64 + H - CU65), (NI64 + H - CO61 - HE4),
+               (NI64 + D2 - NI65 - H), (NI64 + HE4 - ZN67 - N), (NI64 - NI63 - N)]
+    rounded = [-2.456963, -3.703447, -7.718825, 7.453614, 0.663200, 3.873514, -4.865060, -9.657461]
+    from_string = features.reaction_q(df)
+    from_mt = features.reaction_q(df.drop(columns="reaction"))
+    for i in range(len(df)):
+        assert from_string.iloc[i] == pytest.approx(by_hand[i] / 1e3, abs=1e-9)
+        assert from_string.iloc[i] == pytest.approx(rounded[i], abs=1e-6)
+        assert from_mt.iloc[i] == pytest.approx(from_string.iloc[i], abs=1e-12)
+
+
+def test_reaction_q_is_nan_where_the_outgoing_particles_are_not_fixed():
+    df = _frame([
+        ("n", 17, 35, 1, "17-CL-35(N,TOT),,SIG"),
+        ("p", 28, 64, 9000, "28-NI-64(P,X)27-CO-58,,SIG"),
+        ("n", 92, 235, 18, "92-U-235(N,F),,SIG"),
+        ("p", 28, 64, 3, "28-NI-64(P,NON),,SIG"),
+        ("n", 28, 64, 101, "28-NI-64(N,ABS),,SIG"),
+        ("n", 28, 64, 9000, "28-NI-64(N,SCT),,SIG"),
+    ])
+    assert features.reaction_q(df).isna().all()
+    assert features.reaction_q(df.drop(columns="reaction")).isna().all()
+
+
+def test_reaction_string_overrides_a_mismatched_mt():
+    # (D,INL) is filed under MT 103 in a few datasets: the string gives 0, the MT label alone would give the (d,p) value
+    df = _frame([("d", 28, 64, 103, "28-NI-64(D,INL)28-NI-64,,SIG"), ("p", 28, 64, 103, "28-NI-64(P,INL)28-NI-64,,SIG"), ("n", 28, 64, 2, "28-NI-64(N,EL)28-NI-64,,SIG")])
+    q = features.reaction_q(df)
+    assert q.tolist() == [0.0, 0.0, 0.0]
+    assert features.reaction_q(df.drop(columns="reaction")).iloc[0] == pytest.approx(3.873514, abs=1e-6)
+
+
+def test_ejectiles_from_reaction():
+    f = features.ejectiles_from_reaction
+    assert f("17-CL-35(N,P)16-S-35,,SIG") == ["p"] and f("42-MO-100(P,2N)43-TC-99-M,,SIG") == ["n", "n"]
+    assert f("1-H-2(N,G)1-H-3,,SIG") == [] and f("3-LI-7(P,N+A)2-HE-3,,SIG") == ["n", "a"]
+    assert f("2-HE-4(HE3,G)4-BE-7,,SIG") == [] and f("3-LI-6(D,HE3)2-HE-5,,SIG") == ["he3"]
+    assert f("26-FE-56(N,INL)26-FE-56,,SIG") == ["n"]
+    assert f("92-U-238(N,F),,SIG") is None and f("82-PB-208(P,X)0-NN-1,,SIG") is None and f("toy") is None

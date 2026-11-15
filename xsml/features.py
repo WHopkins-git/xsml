@@ -15,6 +15,7 @@ Mass excesses marked ``#`` in AME2020 are extrapolated, not measured; the column
 """
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -23,7 +24,7 @@ import pandas as pd
 
 from .data import DATA_DIR
 
-__all__ = ["MAGIC", "LIGHT", "MT_EJECTILES", "ame_table", "nuclide_features", "element_symbols", "q_value", "reaction_q", "append"]
+__all__ = ["MAGIC", "LIGHT", "MT_EJECTILES", "ame_table", "nuclide_features", "element_symbols", "q_value", "ejectiles_from_reaction", "reaction_q", "append"]
 
 #: Magic numbers used for the shell-distance features.
 MAGIC = (2, 8, 20, 28, 50, 82, 126)
@@ -31,8 +32,9 @@ MAGIC = (2, 8, 20, 28, 50, 82, 126)
 #: Light particles as (Z, A); the photon is (0, 0).
 LIGHT = {"g": (0, 0), "n": (0, 1), "p": (1, 1), "d": (1, 2), "t": (1, 3), "he3": (2, 3), "a": (2, 4)}
 
-#: Emitted light particles for ENDF MT numbers with a fixed set of outgoing particles.
-#: MT 2 (elastic) and MT 4 for incident neutrons (inelastic) are handled in :func:`reaction_q`.
+#: Emitted light particles for ENDF MT numbers with a fixed set of outgoing particles, whatever the projectile
+#: (MT 4 is "one neutron out": inelastic scattering for a neutron, (p,n) for a proton). Used by :func:`reaction_q`
+#: only when the frame has no ``reaction`` column. MT 1, 3, 18, 101 and 9000 and above are absent on purpose.
 MT_EJECTILES = {
     4: ["n"], 11: ["n", "n", "d"], 16: ["n", "n"], 17: ["n", "n", "n"], 22: ["n", "a"], 23: ["n", "a", "a", "a"], 24: ["n", "n", "a"],
     25: ["n", "n", "n", "a"], 28: ["n", "p"], 29: ["n", "a", "a"], 32: ["n", "d"], 33: ["n", "t"], 34: ["n", "he3"], 37: ["n", "n", "n", "n"],
@@ -149,23 +151,70 @@ def nuclide_features(path: Path | str | None = None) -> pd.DataFrame:
     return f
 
 
-def reaction_q(df: pd.DataFrame, path: Path | str | None = None) -> pd.Series:
-    """Ground-state Q-value (MeV) of the reaction of every row of ``df`` (columns ``projectile``, ``Z``, ``A``, ``MT``).
+_PROCESS = re.compile(r"\(([A-Z0-9]+),([A-Z0-9+]+)\)")
+_TOKEN = re.compile(r"(\d*)(HE3|N|P|D|T|A|G)")
+_CODE = {"N": "n", "P": "p", "D": "d", "T": "t", "HE3": "he3", "A": "a", "G": "g"}
 
-    The outgoing particles are taken from :data:`MT_EJECTILES`. MT 2 (elastic) and MT 4 for an incident neutron
-    (inelastic) give 0. NaN for MT numbers without a fixed set of outgoing particles (total, fission, production
-    cross sections and others) and where a mass is missing.
+
+def ejectiles_from_reaction(reaction: str):
+    """Emitted light particles read from an EXFOR reaction string, or None if the string does not fix them.
+
+    ``"28-NI-64(P,N)29-CU-64,,SIG"`` gives ``["n"]``; ``(P,2N)`` gives ``["n", "n"]``; ``(N,N+P)`` gives
+    ``["n", "p"]``; ``(N,G)`` gives ``[]`` (a photon carries no mass). ``INL`` and ``EL`` give the projectile.
+    Processes without a fixed set of outgoing particles (``TOT``, ``X``, ``F``, ``ABS``, ``NON``, ``SCT`` and
+    others) give None.
     """
-    keys = df[["projectile", "Z", "A", "MT"]].astype({"projectile": str}).drop_duplicates()
+    m = _PROCESS.search(str(reaction))
+    if not m:
+        return None
+    projectile, process = m.groups()
+    if process in ("INL", "EL"):
+        return [_CODE[projectile]] if projectile in _CODE else None
+    out = []
+    for token in process.split("+"):
+        t = _TOKEN.fullmatch(token)
+        if not t:
+            return None
+        if t.group(2) != "G":
+            out += [_CODE[t.group(2)]] * int(t.group(1) or 1)
+    return out
+
+
+def reaction_q(df: pd.DataFrame, path: Path | str | None = None) -> pd.Series:
+    """Ground-state Q-value (MeV) of the reaction of every row of ``df``, for any projectile.
+
+    If ``df`` has the column ``reaction`` (the EXFOR reaction string), the outgoing particles are read from it
+    with :func:`ejectiles_from_reaction`; this is the reliable route, because the string is the definition of the
+    measured quantity. Without that column the ``MT`` number is used with :data:`MT_EJECTILES` (plus MT 2, and
+    MT 4 for an incident neutron, which give 0); that is correct for the standard numbers, where MT describes
+    the outgoing particles whatever the projectile, but a few datasets carry an MT that does not match their
+    reaction string.
+
+    The value is NaN, explicitly, where the reaction has no fixed set of outgoing particles: totals (MT 1),
+    nonelastic and absorption (MT 3, 101), fission (MT 18), production cross sections ``(z,X)`` and scattering
+    sums (MT 9000 and above), and where a mass is not in the table. The Q-value is to the ground state of the
+    residual nucleus; an isomeric product (``product_state``) lies higher by its excitation energy, which is
+    not in AME2020.
+    """
+    me = _mass_excess(path)
+    use_string = "reaction" in df.columns
+    cols = ["projectile", "Z", "A", "reaction" if use_string else "MT"]
+    keys = df[cols].astype({"projectile": str}).astype({cols[3]: str} if use_string else {}).drop_duplicates()
     q = {}
-    for p, z, a, mt in keys.itertuples(index=False):
-        if mt == 2 or (mt == 4 and p == "n"):
-            q[(p, z, a, mt)] = 0.0 if (z, a) in _mass_excess(path) else np.nan
-        elif mt in MT_EJECTILES and p in LIGHT:
-            q[(p, z, a, mt)] = q_value(int(z), int(a), p, MT_EJECTILES[mt], path)
+    for proj, z, a, r in keys.itertuples(index=False):
+        if use_string:
+            ej = ejectiles_from_reaction(r)
+        elif r == 2 or (r == 4 and proj == "n"):
+            ej = [proj]
         else:
-            q[(p, z, a, mt)] = np.nan
-    idx = pd.MultiIndex.from_frame(df[["projectile", "Z", "A", "MT"]].astype({"projectile": str}))
+            ej = MT_EJECTILES.get(r)
+        if ej is None or proj not in LIGHT or (int(z), int(a)) not in me:
+            q[(proj, z, a, r)] = np.nan
+        elif ej == [proj]:
+            q[(proj, z, a, r)] = 0.0                                   # elastic and inelastic scattering
+        else:
+            q[(proj, z, a, r)] = q_value(int(z), int(a), proj, ej, path)
+    idx = pd.MultiIndex.from_frame(df[cols].astype({"projectile": str}).astype({cols[3]: str} if use_string else {}))
     return pd.Series(pd.Series(q).reindex(idx).to_numpy(), index=df.index, name="Q_reaction")
 
 

@@ -18,7 +18,8 @@ Models are fitted to `log10(sigma_b)`. `features.append` adds `log10_energy` and
 * `subentry`: entry plus a three-digit subentry number, eight characters. Example: `14840006`.
 * `dataset`: the subentry, followed by a pointer character where one subentry holds several data columns. Example: `145560031`. One dataset is one table of points for one reaction. This is the identifier to keep through every step.
 * An isotope is labelled `1000 * Z + A` (`data.isotope_id`); Cl-35 is `17035`.
-* `MT` is the ENDF reaction number: 1 total, 2 elastic, 16 (z,2n), 18 fission, 102 (z,gamma), 103 (z,p), 107 (z,alpha), and so on. For a charged projectile the number describes the outgoing particles in the same way. `reaction` holds the full EXFOR reaction string, including the product nucleus.
+* `reaction` holds the full EXFOR reaction string, including the product nucleus. It is the authority on what a row is.
+* `MT` is a convenience label taken from the X4Pro database: 1 total, 2 elastic, 4 one neutron out, 16 two neutrons out, 18 fission, 102 photon only, 103 one proton out, 107 one alpha out, and so on. The number describes the outgoing particles whatever the projectile, so MT 4 is `(N,INL)` for a neutron and `(P,N)` for a proton, and MT 103 is `(N,P)` for a neutron and `(P,INL)` for a proton. MT 9000 holds production cross sections `(z,X)` of many different products. The table by projectile is in `docs/data_dictionary.md`.
 
 ## Dates
 
