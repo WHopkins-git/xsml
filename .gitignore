@@ -1,0 +1,14 @@
+# the data table is downloaded, never committed
+*.parquet
+dist/
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+build/
+# local deployment helpers are never committed
+scripts/_run_*.sh
