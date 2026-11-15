@@ -1,0 +1,46 @@
+import numpy as np
+import pytest
+
+from xsml import data, features, libraries, metrics, models, splits
+
+
+def test_shipped_library_curves():
+    a = libraries.available()
+    assert set(a.library) == {"ENDF-B-VII.1", "ENDF-B-VIII.0", "JENDL-5"} and set(a.file) == {"Cl35_np.csv"}
+    c = libraries.curve("Cl-35", 103, "ENDF-B-VIII.0")
+    assert c.energy_eV.is_monotonic_increasing and c.energy_eV.min() == 1e5 and c.energy_eV.max() == 2e7 and (c.sigma_b >= 0).all()
+    assert len(libraries.curve("Cl-35", 103)) == a.points.sum()
+
+
+def test_library_interpolation():
+    c = libraries.curve("Cl-35", 103, "JENDL-5")
+    c = c[c.sigma_b > 0]
+    i = len(c) // 2
+    e = c.energy_eV.to_numpy()
+    assert libraries.at([e[i]], "JENDL-5")[0] == pytest.approx(c.sigma_b.iloc[i], rel=1e-6)
+    mid = libraries.at([np.sqrt(e[i] * e[i + 1])], "JENDL-5")[0]
+    assert min(c.sigma_b.iloc[i], c.sigma_b.iloc[i + 1]) <= mid <= max(c.sigma_b.iloc[i], c.sigma_b.iloc[i + 1])
+    assert np.isnan(libraries.at([1.0, 3e7], "JENDL-5")).all()                 # outside 0.1 to 20 MeV
+
+
+def test_library_not_shipped():
+    with pytest.raises(FileNotFoundError, match="Cl35_np.csv"):
+        libraries.curve("Au-197", 102)
+    with pytest.raises(KeyError):
+        libraries.curve("Cl-35", 103, "TENDL-2023")
+
+
+def test_quickstart_end_to_end(data_dir, tmp_path):
+    """The README quickstart on the toy table: load, features, isotope folds, fit, score with an interval, log."""
+    df = data.load(data_dir=data_dir)
+    df = features.append(data.select(df, projectile="n", mt=103), path=data_dir / "mass_1.mas20.txt").reset_index(drop=True)
+    X, y, iso = df[["log10_energy", "Z", "N", "S_n", "Q_reaction"]], df.log10_sigma, data.isotope_id(df.Z.to_numpy(), df.A.to_numpy())
+    cv = splits.fold_splits(df, 4)
+    for tr, te in cv:
+        splits.assert_no_leakage(df.iloc[tr], df.iloc[te])
+    _, oof = models.cv_rmse(models.decision_tree(min_samples_leaf=2), X, y, cv)
+    score = metrics.cluster_bootstrap(y, oof, iso, n_boot=200)
+    assert 1 < score["low"] <= score["value"] <= score["high"] < 10 and score["n_groups"] == 12
+    row = metrics.log_score(tmp_path / "score_log.csv", model="decision_tree", features=list(X.columns), split="4 isotope folds", metric="rms_factor",
+                            value=score["value"], ci_low=score["low"], ci_high=score["high"], n_groups=score["n_groups"], n_points=score["n_points"])
+    assert row["value"] == score["value"] and (tmp_path / "score_log.csv").read_text().count("\n") == 2
