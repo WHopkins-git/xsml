@@ -12,3 +12,7 @@ venv/
 build/
 # local deployment helpers are never committed
 scripts/_run_*.sh
+# score logs written by running the example notebooks
+examples/score_log_examples.csv
+# answer keys never ship
+answers/

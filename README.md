@@ -4,7 +4,7 @@ A small toolkit for machine learning on experimental nuclear cross sections.
 
 It provides a linted table of EXFOR cross sections, the AME2020 mass table with derived nuclear properties,
 splits in which the isotope is the unit of observation, scores with intervals, thin wrappers around tree
-models, and three feature-importance tools. It is a toolkit, not a course: there are no worked examples.
+models, and three feature-importance tools. It is a toolkit, not a course. The notebooks in `examples/` show the functions in use; they are not a method.
 The problem to be solved is stated in `briefs/`.
 
 ## Contents
@@ -18,6 +18,7 @@ The problem to be solved is stated in `briefs/`.
 | `xsml/models.py` | `decision_tree()`, `random_forest()`, `xgboost()`, `cv_rmse()`, `tune()`, `nested_cv()` |
 | `xsml/importance.py` | `block_permutation()`, `drop_column()`, `shap_values()` |
 | `xsml/libraries.py` | `curve()`, `at()`, `available()`: evaluated-library curves (Cl-35 (n,p) only) |
+| `examples/` | two executed notebooks showing the functions in use on other reactions |
 | `briefs/` | the Cl-35 (n,p) brief and the milestones of the free project |
 | `docs/data_dictionary.md` | every column of the table |
 | `docs/conventions.md` | units, identifiers, dates, metrics, the fold rule |
@@ -49,7 +50,7 @@ The table is about 49 MB and is not stored in git.
 2. Place it in `data/`.
 3. `xsml.data.load()` checks the SHA-256 of the file against `data/MANIFEST.json` on every call and stops with an explanation if the file is missing, incomplete or from another version.
 
-Then run `pytest` from the repository root; all tests should pass.
+Then run `pytest` from the repository root; all tests should pass. `pytest -m notebooks` also executes the example notebooks (about two minutes).
 
 ## Quickstart
 

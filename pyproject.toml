@@ -28,4 +28,6 @@ packages = ["xsml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not notebooks'"
+markers = ["notebooks: executes the example notebooks on the real table (slow); run with pytest -m notebooks"]
 filterwarnings = ["ignore::DeprecationWarning", "ignore::FutureWarning"]
