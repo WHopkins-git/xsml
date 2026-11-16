@@ -22,6 +22,13 @@ is downloaded, interpolated or computed beyond reading. Three kinds of file are 
         reactions with resonances (capture, fission, total, elastic) in ENDF/B-VII.1 and JENDL-5.
 "njoy"  Cl-35 (n,p) only: pointwise NJOY2016 curves of ``docs/paper/data/cl35_library_curves.json``.
 
+Proton-induced reactions (``TENDL_PROTON``) come from TENDL-2025, a library calculated with the model code TALYS:
+section MF 3 of ``data/external/2026-10-11/tendl2025/p/<Z>_<A>.endf`` as tabulated, up to 30 MeV (above 30 MeV
+TENDL gives no separate channels). Where the file splits the product into ground state and isomer (MF 10), those
+parts are written as separate files ``..._g.csv`` and ``..._m.csv``; they are copied, never summed. Checked for
+every entry: target and projectile of the file, linear interpolation, the Q-value of the section against AME2020,
+the first tabulated energy against the threshold from that Q-value, and ground state plus isomer against the total.
+
 Values are written with seven significant figures.
 """
 import argparse
@@ -72,6 +79,43 @@ REACTIONS = [
     (26, 56, 2, ["bins"], {}),                        # Fe-56 elastic
 ]
 
+# (Z, A, MT): proton-induced, TENDL-2025. One line per reaction; the comment names the product.
+TENDL_PROTON = [
+    (42, 100, 16),   # Mo-100 (p,2n) Tc-99, isomer Tc-99m
+    (42, 100, 4),    # Mo-100 (p,n) Tc-100
+    (42, 94, 4),     # Mo-94 (p,n) Tc-94, isomer Tc-94m
+    (52, 124, 4),    # Te-124 (p,n) I-124
+    (52, 124, 16),   # Te-124 (p,2n) I-123
+    (54, 124, 16),   # Xe-124 (p,2n) Cs-123, decays to I-123
+    (54, 124, 28),   # Xe-124 (p,np) Xe-123, decays to I-123
+    (48, 112, 16),   # Cd-112 (p,2n) In-111
+    (32, 70, 16),    # Ge-70 (p,2n) As-69
+    (20, 44, 4),     # Ca-44 (p,n) Sc-44, isomer Sc-44m
+    (20, 48, 16),    # Ca-48 (p,2n) Sc-47
+    (21, 45, 4),     # Sc-45 (p,n) Ti-45
+    (24, 52, 4),     # Cr-52 (p,n) Mn-52, isomer Mn-52m
+    (28, 58, 107),   # Ni-58 (p,a) Co-55
+    (28, 60, 4),     # Ni-60 (p,n) Cu-60
+    (28, 62, 4),     # Ni-62 (p,n) Cu-62
+    (30, 66, 4),     # Zn-66 (p,n) Ga-66
+    (30, 70, 107),   # Zn-70 (p,a) Cu-67
+    (33, 75, 17),    # As-75 (p,3n) Se-73
+    (34, 77, 4),     # Se-77 (p,n) Br-77
+    (34, 78, 16),    # Se-78 (p,2n) Br-77
+    (36, 82, 16),    # Kr-82 (p,2n) Rb-81
+    (38, 86, 4),     # Sr-86 (p,n) Y-86
+    (40, 90, 4),     # Zr-90 (p,n) Nb-90
+    (7, 14, 107),    # N-14 (p,a) C-11
+    (8, 16, 107),    # O-16 (p,a) N-13
+    (64, 155, 4),    # Gd-155 (p,n) Tb-155
+    (64, 156, 16),   # Gd-156 (p,2n) Tb-155
+    (66, 162, 16),   # Dy-162 (p,2n) Ho-161
+    (67, 165, 4),    # Ho-165 (p,n) Er-165
+    (69, 169, 4),    # Tm-169 (p,n) Yb-169
+    (79, 197, 4),    # Au-197 (p,n) Hg-197
+    (88, 226, 16),   # Ra-226 (p,2n) Ac-225
+]
+
 ARCHIVES = {"ENDF-B-VII.1": "ENDF-B-VII.1-neutrons.zip", "ENDF-B-VIII.0": "ENDF-B-VIII.0_neutrons.zip", "JENDL-5": "jendl5-n.tar.gz"}
 
 
@@ -117,6 +161,61 @@ def check(bin_means, reference: dict, e: np.ndarray, s: np.ndarray) -> float:
     mine = bin_means(fine, np.interp(fine, e, s))
     d = [abs(mine[k] - reference[str(k)]) for k in mine if str(k) in reference and np.isfinite(mine[k]) and np.isfinite(reference[str(k)])]
     return max(d) if d else float("nan")
+
+
+def tendl(source: Path, endf6, report: list) -> None:
+    """The proton-induced TENDL-2025 curves of ``TENDL_PROTON``, with the checks of the module docstring."""
+    from xsml import features
+
+    folder = source / "data" / "external" / "2026-10-11" / "tendl2025" / "p"
+    for z, n, mt in TENDL_PROTON:
+        label = f"{element_symbols()[z]}-{n} (p) MT {mt}"
+        f = folder / f"{z}_{n}.endf"
+        if not f.exists():
+            report.append((label, "pointwise (MF 3)", "TENDL-2025", 0, "LEFT OUT: target not on disk"))
+            continue
+        text = f.read_text(encoding="latin-1")
+        sections = endf6.split_sections(text)
+        za, awr, lis = endf6.target_za(sections)
+        nsub = int(round(endf6.parse_float(endf6._fields(text.splitlines()[3])[4])))        # 10010: incident proton
+        awi = endf6.parse_float(endf6._fields(text.splitlines()[3])[0])                     # mass of the projectile in neutron masses
+        rec = endf6.mf3_section(sections, mt)
+        if rec is None or za != 1000 * z + n or lis != 0 or nsub != 10010 or not text.startswith(" TENDL-2025"):
+            report.append((label, "pointwise (MF 3)", "TENDL-2025", 0, f"LEFT OUT: section missing or header mismatch (ZA {za}, LIS {lis}, NSUB {nsub})"))
+            continue
+        q_ame = features.q_value(z, n, "p", features.MT_EJECTILES[mt])
+        threshold = max(-rec["c1"], 0.0) * (awr + awi) / awr
+        parts = [("", rec, "")]
+        lines = sections.get((10, mt))
+        if lines:
+            states, i = [], 1
+            for _ in range(int(round(endf6.parse_float(endf6._fields(lines[0])[4])))):
+                r, i = endf6.tab1(lines, i)
+                states.append(r)
+            states.sort(key=lambda r: r["l2"])
+            isomers = [r for r in states if r["l2"] > 0]
+            grid = rec["x"][rec["x"] < 3e7]
+            total = sum(np.interp(grid, r["x"], r["y"], left=0, right=0) for r in states)
+            worst = float(np.abs(total - np.interp(grid, rec["x"], rec["y"])).max())
+            for r in states:
+                tag = "g" if r["l2"] == 0 else ("m" if len(isomers) == 1 else f"m{isomers.index(r) + 1}")
+                parts.append((tag, r, f"level {r['l2']}, {(r['c1'] - r['c2']) / 1e3:.1f} keV above the ground state; states sum to the total within {worst:.1e} b"))
+        for tag, r, note in parts:
+            if set(r["int"].tolist()) != {2} or abs(rec["c1"] / 1e6 - q_ame) > 1e-3:
+                report.append((label + " " + tag, "pointwise (MF 3)", "TENDL-2025", 0, f"LEFT OUT: interpolation {set(r['int'].tolist())} or Q {rec['c1'] / 1e6:.4f} against AME {q_ame:.4f}"))
+                continue
+            keep = np.flatnonzero(r["x"] <= 3e7)
+            keep = keep[np.concatenate([[True], np.diff(r["x"][keep]) > 0])]                     # the table repeats 30 MeV with a zero: keep the first
+            e, sig = r["x"][keep], r["y"][keep]
+            own_threshold = max(-r["c2"], 0.0) * (awr + awi) / awr
+            if q_ame < 0 and abs(e[0] - own_threshold) > 2e3 + 1e-4 * own_threshold:
+                report.append((label + " " + tag, "pointwise", "TENDL-2025", 0, f"LEFT OUT: first energy {e[0]:.6g} eV against threshold {own_threshold:.6g} eV"))
+                continue
+            path = xl._file((z, n), mt, REPO / "data", "p", tag or None)
+            write(pd.DataFrame({"library": "TENDL-2025", "energy_eV": e, "sigma_b": sig}), path)
+            kind = "MF 3" if not tag else "MF 10"
+            report.append((label + (" " + tag if tag else ""), f"pointwise ({kind})", "TENDL-2025", len(e),
+                           f"Q {rec['c1'] / 1e6:.5f} MeV (AME2020 {q_ame:.5f}); first energy {e[0] / 1e6:.5f} MeV, threshold {threshold / 1e6:.5f}; max {sig.max():.4f} b" + ("; " + note if note else "")))
 
 
 def main() -> None:
@@ -207,6 +306,7 @@ def main() -> None:
                     write(pd.concat(parts, ignore_index=True), path_of(z, n, mt, bins=True))
             else:
                 raise SystemExit(f"unknown kind {kind}")
+    tendl(source, endf6, report)
     print(pd.DataFrame(report, columns=["reaction", "form", "library", "points", "note"]).to_string(index=False))
     total = sum(f.stat().st_size for f in (REPO / "data" / "libraries").glob("*.csv"))
     print(f"data/libraries: {len(list((REPO / 'data' / 'libraries').glob('*.csv')))} files, {total / 1e6:.2f} MB")

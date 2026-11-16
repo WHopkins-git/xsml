@@ -84,7 +84,7 @@ The quickstart uses neutron capture so that it does not touch the reaction of th
 The repository does not contain evaluated libraries and does not process ENDF files. It ships curves for a
 selection of neutron-induced reactions in `data/libraries/`, from ENDF/B-VII.1, ENDF/B-VIII.0 and JENDL-5:
 pointwise curves (`libraries.curve`, `libraries.at`) and, for reactions with resonances, averages over
-quarter-decade energy bins (`libraries.bin_means`). `libraries.available()` lists them. Not every library is
+quarter-decade energy bins (`libraries.bin_means`). For proton-induced reactions it ships curves of TENDL-2025 up to 30 MeV; TENDL is calculated with a nuclear model code and is not an evaluation of the measurements. `libraries.available()` lists everything, with a column `basis`. Not every library is
 present for every reaction. Sources and caveats are in `data/README.md` and `scripts/build_library_curves.py`.
 For another reaction the curve has to be obtained from the library's own distribution and saved in the same format.
 

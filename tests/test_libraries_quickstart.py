@@ -6,7 +6,7 @@ from xsml import data, features, libraries, metrics, models, splits
 
 def test_shipped_library_curves():
     a = libraries.available()
-    assert set(a.library) == {"ENDF-B-VII.1", "ENDF-B-VIII.0", "JENDL-5"} and {"Cl35_np.csv", "Fe56_ninl.csv", "Sm152_ng.csv", "Sm152_ng_bins.csv"} <= set(a.file)
+    assert {"ENDF-B-VII.1", "ENDF-B-VIII.0", "JENDL-5"} <= set(a.library) and {"Cl35_np.csv", "Fe56_ninl.csv", "Sm152_ng.csv", "Sm152_ng_bins.csv"} <= set(a.file)
     assert set(a.library[a.file == "Sm152_ng.csv"]) == {"ENDF-B-VIII.0"} and len(a[a.file == "Fe56_ninl.csv"]) == 3
     assert set(a.form[a.file.str.endswith("_bins.csv")]) == {"bin averages"} and set(a.form[~a.file.str.endswith("_bins.csv")]) == {"pointwise"}
     a = a[a.file == "Cl35_np.csv"]
@@ -50,36 +50,74 @@ def test_bin_means():
 
 def test_every_shipped_library_file_loads_and_is_well_formed():
     """Every file in data/libraries: readable through the loader, energies increasing, cross sections not negative."""
-    import re
     from pathlib import Path
 
-    from xsml.features import element_symbols
-
-    number_of = {name: mt for mt, name in libraries.REACTION_NAMES.items()}
-    z_of = {symbol: z for z, symbol in element_symbols().items()}
     files = sorted((Path(libraries.DATA_DIR) / "libraries").glob("*.csv"))
-    assert len(files) >= 30
+    assert len(files) >= 90
     listed = libraries.available()
     assert set(listed.file) == {f.name for f in files}
+    assert set(listed.library) == set(libraries.LIBRARIES)
+    assert set(listed.basis[listed.library == "TENDL-2025"]) == {"model calculation"} and set(listed.basis[listed.library != "TENDL-2025"]) == {"evaluation"}
     for f in files:
-        symbol, mass, reaction = re.fullmatch(r"([A-Z][a-z]?)(\d+)_([a-z0-9]+)(?:_bins)?\.csv", f.name).groups()
-        target, mt = (z_of[symbol], int(mass)), number_of[reaction]
-        if f.name.endswith("_bins.csv"):
-            t = libraries.bin_means(target, mt)
+        info = libraries.parse_file_name(f.name)
+        target, mt, projectile = (info["Z"], info["A"]), info["MT"], info["projectile"]
+        if info["binned"]:
+            t = libraries.bin_means(target, mt, projectile=projectile)
             assert list(t.columns) == ["library", "e_low_eV", "e_high_eV", "sigma_b"], f.name
             for lib, g in t.groupby("library"):
                 assert g.e_low_eV.is_monotonic_increasing and (g.e_high_eV > g.e_low_eV).all() and (g.sigma_b > 0).all(), (f.name, lib)
                 assert np.isfinite(g[["e_low_eV", "e_high_eV", "sigma_b"]].to_numpy()).all() and g.e_high_eV.max() <= 2e7, (f.name, lib)
         else:
-            t = libraries.curve(target, mt)
+            t = libraries.curve(target, mt, projectile=projectile, state=info["state"])
             assert list(t.columns) == ["library", "energy_eV", "sigma_b"], f.name
             for lib, g in t.groupby("library"):
-                assert len(g) >= 10 and g.energy_eV.is_monotonic_increasing and (g.energy_eV > 0).all() and g.energy_eV.max() <= 2e7, (f.name, lib)
+                top = 3e7 if lib == "TENDL-2025" else 2e7
+                assert len(g) >= 5 and g.energy_eV.is_monotonic_increasing and (g.energy_eV > 0).all() and g.energy_eV.max() <= top, (f.name, lib)
                 assert (g.sigma_b >= 0).all() and (g.sigma_b > 0).any() and np.isfinite(g.sigma_b).all(), (f.name, lib)
                 positive = g[g.sigma_b > 0]
-                middle = np.sqrt(positive.energy_eV.iloc[len(positive) // 2] * positive.energy_eV.iloc[len(positive) // 2 + 1])
-                assert libraries.at([middle], lib, target, mt)[0] > 0, (f.name, lib)
-        assert set(t.library) <= {"ENDF-B-VII.1", "ENDF-B-VIII.0", "JENDL-5"}
+                middle = np.sqrt(positive.energy_eV.iloc[len(positive) // 2 - 1] * positive.energy_eV.iloc[len(positive) // 2])
+                assert libraries.at([middle], lib, target, mt, projectile=projectile, state=info["state"])[0] > 0, (f.name, lib)
+        assert set(t.library) <= set(libraries.LIBRARIES)
+        # the neutron files hold the three evaluations only, the proton files the model library only
+        assert (set(t.library) == {"TENDL-2025"}) == (projectile == "p"), f.name
+
+
+def test_tendl_proton_curves_start_at_the_threshold_from_ame():
+    """Each proton curve starts at the threshold that AME2020 gives for its reaction (isomer: above it, by the level energy)."""
+    from xsml import features
+
+    listed = libraries.available()
+    listed = listed[listed.projectile == "p"]
+    assert len(listed) >= 60 and set(listed.library) == {"TENDL-2025"} and set(listed.state) == {"", "g", "m"}
+    masses = features.ame_table().set_index(["Z", "A"]).atomic_mass_u
+    for row in listed.itertuples():
+        info = libraries.parse_file_name(row.file)
+        q = features.q_value(info["Z"], info["A"], "p", features.MT_EJECTILES[info["MT"]])
+        c = libraries.curve((info["Z"], info["A"]), info["MT"], "TENDL-2025", projectile="p", state=info["state"])
+        first = c.energy_eV.iloc[0]
+        if q >= 0:
+            assert first < 1e6, row.file                                                           # no threshold: the table starts low
+            continue
+        threshold = -q * 1e6 * (masses[(info["Z"], info["A"])] + 1.00727647) / masses[(info["Z"], info["A"])]
+        assert c.sigma_b.iloc[0] == 0, row.file
+        if row.state == "m":
+            assert threshold + 1e3 < first < threshold + 1e6, (row.file, first, threshold)
+        else:
+            assert first == pytest.approx(threshold, rel=2e-4, abs=2e3), (row.file, first, threshold)
+
+
+def test_tendl_ground_state_and_isomer_add_up_to_the_total():
+    total = libraries.curve("Mo-100", 16, "TENDL-2025", projectile="p")
+    ground = libraries.curve("Mo-100", 16, "TENDL-2025", projectile="p", state="g")
+    isomer = libraries.curve("Mo-100", 16, "TENDL-2025", projectile="p", state="m")
+    grid = total.energy_eV.to_numpy()
+    summed = np.interp(grid, ground.energy_eV, ground.sigma_b, left=0) + np.interp(grid, isomer.energy_eV, isomer.sigma_b, left=0)
+    assert np.allclose(summed, total.sigma_b, atol=1e-6)
+    assert isomer.energy_eV.iloc[0] - ground.energy_eV.iloc[0] == pytest.approx(142.7e3 * 101 / 100, rel=0.01)     # Tc-99m lies 142.7 keV up
+    assert libraries.parse_file_name("Mo100_p2n_m.csv") == {"Z": 42, "A": 100, "target": "Mo-100", "projectile": "p", "MT": 16, "state": "m", "binned": False}
+    assert libraries.parse_file_name("Fe56_ng_bins.csv")["binned"] and libraries.parse_file_name("Cl35_np.csv")["projectile"] == "n"
+    with pytest.raises(FileNotFoundError):
+        libraries.curve("Mo-100", 16, projectile="p", state="m2")
 
 
 def test_library_not_shipped():

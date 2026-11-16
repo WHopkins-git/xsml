@@ -65,7 +65,7 @@ Caveats:
   resonance peaks and is not comparable point by point with a measurement or with a smooth model curve.
 * The Fe-56 curves fluctuate strongly up to a few MeV (resolved structure in the evaluation); measured points
   taken with a broad energy resolution average over that structure.
-* Further reactions were added with the same three kinds of source (MF 3 as filed for threshold reactions, the IAEA-NDS service table for ENDF/B-VIII.0, NJOY bin averages). `xsml.libraries.available()` lists every file; the list of reactions, the sources and the checks applied to each are in `scripts/build_library_curves.py`. Some pointwise ENDF/B-VIII.0 curves of resonance reactions are thinned and do not resolve every resonance. No proton-induced evaluation is shipped.
+* Further reactions were added with the same three kinds of source (MF 3 as filed for threshold reactions, the IAEA-NDS service table for ENDF/B-VIII.0, NJOY bin averages). `xsml.libraries.available()` lists every file; the list of reactions, the sources and the checks applied to each are in `scripts/build_library_curves.py`. Some pointwise ENDF/B-VIII.0 curves of resonance reactions are thinned and do not resolve every resonance. For proton-induced reactions the files hold TENDL-2025 (library name `TENDL-2025`), a library calculated with the model code TALYS and not an evaluation of the measurements: section MF 3 as tabulated, up to 30 MeV, and the ground-state and isomer parts (`_g`, `_m`) where the file gives them.
 
 ## Licence of the data
 
