@@ -16,3 +16,5 @@ scripts/_run_*.sh
 examples/score_log_examples.csv
 # answer keys never ship
 answers/
+# project briefs are handed out separately
+briefs/

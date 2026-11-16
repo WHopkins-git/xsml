@@ -5,7 +5,6 @@ A small toolkit for machine learning on experimental nuclear cross sections.
 It provides a linted table of EXFOR cross sections, the AME2020 mass table with derived nuclear properties,
 splits in which the isotope is the unit of observation, scores with intervals, thin wrappers around tree
 models, and three feature-importance tools. It is a toolkit, not a course. The notebooks in `examples/` show the functions in use; they are not a method.
-The problem to be solved is stated in `briefs/`.
 
 ## Contents
 
@@ -19,7 +18,6 @@ The problem to be solved is stated in `briefs/`.
 | `xsml/importance.py` | `block_permutation()`, `drop_column()`, `shap_values()` |
 | `xsml/libraries.py` | `curve()`, `at()`, `bin_means()`, `available()`: the evaluated-library curves that are shipped (three reactions) |
 | `examples/` | two executed notebooks showing the functions in use on other reactions |
-| `briefs/` | the Cl-35 (n,p) brief and the milestones of the free project |
 | `docs/data_dictionary.md` | every column of the table |
 | `docs/conventions.md` | units, identifiers, dates, metrics, the fold rule |
 | `results/score_log.csv` | the score log: every score computed is appended here |
