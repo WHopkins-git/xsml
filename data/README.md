@@ -7,7 +7,7 @@
 | `exfor_linted_v1.parquet` | no (download) | the linted EXFOR table, one row per measured point; columns in `docs/data_dictionary.md` |
 | `MANIFEST.json` | yes | file name, SHA-256, size, row counts, build date and the source frames of the table |
 | `mass_1.mas20.txt` | yes | AME2020 atomic mass table, unmodified, read by `xsml.features` |
-| `libraries/*.csv` | yes | evaluated-library curves for three reactions (see below) |
+| `libraries/*.csv` | yes | evaluated-library curves for a selection of neutron-induced reactions (see below) |
 
 ## Download
 
@@ -65,7 +65,7 @@ Caveats:
   resonance peaks and is not comparable point by point with a measurement or with a smooth model curve.
 * The Fe-56 curves fluctuate strongly up to a few MeV (resolved structure in the evaluation); measured points
   taken with a broad energy resolution average over that structure.
-* No other reaction and no other library is shipped.
+* Further reactions were added with the same three kinds of source (MF 3 as filed for threshold reactions, the IAEA-NDS service table for ENDF/B-VIII.0, NJOY bin averages). `xsml.libraries.available()` lists every file; the list of reactions, the sources and the checks applied to each are in `scripts/build_library_curves.py`. Some pointwise ENDF/B-VIII.0 curves of resonance reactions are thinned and do not resolve every resonance. No proton-induced evaluation is shipped.
 
 ## Licence of the data
 

@@ -1,15 +1,17 @@
 """Curves of evaluated nuclear data libraries.
 
 Only what is shipped in ``data/libraries/`` is available: the repository does not contain the evaluated
-libraries themselves and does not process ENDF files. Shipped (provenance in ``data/README.md``):
+libraries themselves and does not process ENDF files. :func:`available` lists what is shipped. Two forms exist:
 
-* pointwise curves (:func:`curve`, :func:`at`): Cl-35 (n,p) and Fe-56 inelastic scattering for ENDF/B-VII.1,
-  ENDF/B-VIII.0 and JENDL-5; Sm-152 (n,g) for ENDF/B-VIII.0;
-* averages over bins of a quarter of a decade in energy (:func:`bin_means`): Sm-152 (n,g) for the three libraries.
-  A bin average is not a curve: in a resonance region it is dominated by the resonance peaks.
+* pointwise curves (:func:`curve`, :func:`at`), file ``<Element><A>_<reaction>.csv`` with the columns
+  ``library, energy_eV, sigma_b``;
+* averages over bins of a quarter of a decade in energy (:func:`bin_means`), file ``..._bins.csv`` with the columns
+  ``library, e_low_eV, e_high_eV, sigma_b``. A bin average is not a curve: in a resonance region it is dominated
+  by the resonance peaks.
 
-For any other reaction the curve has to be obtained elsewhere and saved in the same format
-(``library, energy_eV, sigma_b`` for a curve; ``library, e_low_eV, e_high_eV, sigma_b`` for bin averages).
+Not every library is present for every reaction, and some pointwise curves of resonance reactions are thinned
+(they do not resolve every resonance). The sources and the checks are in ``scripts/build_library_curves.py``;
+a reaction is added there with one line.
 """
 from __future__ import annotations
 
@@ -41,12 +43,15 @@ def _curve_files(data_dir=None) -> list:
 
 
 def available(data_dir=None) -> pd.DataFrame:
-    """The pointwise curves that are shipped: one row per file and library, with the number of points and the energy range."""
+    """What is shipped: one row per file and library, with the form (``pointwise`` or ``bin averages``), the number of
+    points or bins and the energy range."""
     rows = []
-    for f in _curve_files(data_dir):
+    for f in sorted(_folder(data_dir).glob("*.csv")):
         t = pd.read_csv(f)
+        binned = f.name.endswith("_bins.csv")
         for lib, g in t.groupby("library"):
-            rows.append({"file": f.name, "library": lib, "points": len(g), "e_min_eV": g.energy_eV.min(), "e_max_eV": g.energy_eV.max()})
+            rows.append({"file": f.name, "form": "bin averages" if binned else "pointwise", "library": lib, "points": len(g),
+                         "e_min_eV": g.e_low_eV.min() if binned else g.energy_eV.min(), "e_max_eV": g.e_high_eV.max() if binned else g.energy_eV.max()})
     return pd.DataFrame(rows)
 
 

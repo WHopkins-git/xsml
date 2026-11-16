@@ -6,8 +6,9 @@ from xsml import data, features, libraries, metrics, models, splits
 
 def test_shipped_library_curves():
     a = libraries.available()
-    assert set(a.library) == {"ENDF-B-VII.1", "ENDF-B-VIII.0", "JENDL-5"} and set(a.file) == {"Cl35_np.csv", "Fe56_ninl.csv", "Sm152_ng.csv"}
+    assert set(a.library) == {"ENDF-B-VII.1", "ENDF-B-VIII.0", "JENDL-5"} and {"Cl35_np.csv", "Fe56_ninl.csv", "Sm152_ng.csv", "Sm152_ng_bins.csv"} <= set(a.file)
     assert set(a.library[a.file == "Sm152_ng.csv"]) == {"ENDF-B-VIII.0"} and len(a[a.file == "Fe56_ninl.csv"]) == 3
+    assert set(a.form[a.file.str.endswith("_bins.csv")]) == {"bin averages"} and set(a.form[~a.file.str.endswith("_bins.csv")]) == {"pointwise"}
     a = a[a.file == "Cl35_np.csv"]
     c = libraries.curve("Cl-35", 103, "ENDF-B-VIII.0")
     assert c.energy_eV.is_monotonic_increasing and c.energy_eV.min() == 1e5 and c.energy_eV.max() == 2e7 and (c.sigma_b >= 0).all()
@@ -47,9 +48,43 @@ def test_bin_means():
         libraries.bin_means("Cl-35", 103)
 
 
+def test_every_shipped_library_file_loads_and_is_well_formed():
+    """Every file in data/libraries: readable through the loader, energies increasing, cross sections not negative."""
+    import re
+    from pathlib import Path
+
+    from xsml.features import element_symbols
+
+    number_of = {name: mt for mt, name in libraries.REACTION_NAMES.items()}
+    z_of = {symbol: z for z, symbol in element_symbols().items()}
+    files = sorted((Path(libraries.DATA_DIR) / "libraries").glob("*.csv"))
+    assert len(files) >= 30
+    listed = libraries.available()
+    assert set(listed.file) == {f.name for f in files}
+    for f in files:
+        symbol, mass, reaction = re.fullmatch(r"([A-Z][a-z]?)(\d+)_([a-z0-9]+)(?:_bins)?\.csv", f.name).groups()
+        target, mt = (z_of[symbol], int(mass)), number_of[reaction]
+        if f.name.endswith("_bins.csv"):
+            t = libraries.bin_means(target, mt)
+            assert list(t.columns) == ["library", "e_low_eV", "e_high_eV", "sigma_b"], f.name
+            for lib, g in t.groupby("library"):
+                assert g.e_low_eV.is_monotonic_increasing and (g.e_high_eV > g.e_low_eV).all() and (g.sigma_b > 0).all(), (f.name, lib)
+                assert np.isfinite(g[["e_low_eV", "e_high_eV", "sigma_b"]].to_numpy()).all() and g.e_high_eV.max() <= 2e7, (f.name, lib)
+        else:
+            t = libraries.curve(target, mt)
+            assert list(t.columns) == ["library", "energy_eV", "sigma_b"], f.name
+            for lib, g in t.groupby("library"):
+                assert len(g) >= 10 and g.energy_eV.is_monotonic_increasing and (g.energy_eV > 0).all() and g.energy_eV.max() <= 2e7, (f.name, lib)
+                assert (g.sigma_b >= 0).all() and (g.sigma_b > 0).any() and np.isfinite(g.sigma_b).all(), (f.name, lib)
+                positive = g[g.sigma_b > 0]
+                middle = np.sqrt(positive.energy_eV.iloc[len(positive) // 2] * positive.energy_eV.iloc[len(positive) // 2 + 1])
+                assert libraries.at([middle], lib, target, mt)[0] > 0, (f.name, lib)
+        assert set(t.library) <= {"ENDF-B-VII.1", "ENDF-B-VIII.0", "JENDL-5"}
+
+
 def test_library_not_shipped():
     with pytest.raises(FileNotFoundError, match="Cl35_np.csv"):
-        libraries.curve("Au-197", 102)
+        libraries.curve("Pb-208", 102)
     with pytest.raises(KeyError):
         libraries.curve("Cl-35", 103, "TENDL-2023")
 

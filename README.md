@@ -16,7 +16,7 @@ models, and three feature-importance tools. It is a toolkit, not a course. The n
 | `xsml/metrics.py` | `rms_factor()`, `median_factor()`, `per_group()`, `cluster_bootstrap()`, `paired_comparison()`, `log_score()` |
 | `xsml/models.py` | `decision_tree()`, `random_forest()`, `xgboost()`, `cv_rmse()`, `tune()`, `nested_cv()` |
 | `xsml/importance.py` | `block_permutation()`, `drop_column()`, `shap_values()` |
-| `xsml/libraries.py` | `curve()`, `at()`, `bin_means()`, `available()`: the evaluated-library curves that are shipped (three reactions) |
+| `xsml/libraries.py` | `curve()`, `at()`, `bin_means()`, `available()`: the evaluated-library curves that are shipped |
 | `examples/` | two executed notebooks showing the functions in use on other reactions |
 | `docs/data_dictionary.md` | every column of the table |
 | `docs/conventions.md` | units, identifiers, dates, metrics, the fold rule |
@@ -81,15 +81,11 @@ The quickstart uses neutron capture so that it does not touch the reaction of th
 
 ## Evaluated libraries
 
-The repository does not contain evaluated libraries and does not process ENDF files. It ships a few curves
-in `data/libraries/` (provenance and caveats in `data/README.md`):
-
-| Reaction | Pointwise curve (`libraries.curve`, `libraries.at`) | Averages over quarter-decade bins (`libraries.bin_means`) |
-|---|---|---|
-| Cl-35 (n,p) | ENDF/B-VII.1, ENDF/B-VIII.0, JENDL-5, 0.1 to 20 MeV | |
-| Fe-56 (n,n') | ENDF/B-VII.1, ENDF/B-VIII.0, JENDL-5, threshold to 20 MeV | |
-| Sm-152 (n,g) | ENDF/B-VIII.0, 1e-5 eV to 20 MeV | ENDF/B-VII.1, ENDF/B-VIII.0, JENDL-5 |
-
+The repository does not contain evaluated libraries and does not process ENDF files. It ships curves for a
+selection of neutron-induced reactions in `data/libraries/`, from ENDF/B-VII.1, ENDF/B-VIII.0 and JENDL-5:
+pointwise curves (`libraries.curve`, `libraries.at`) and, for reactions with resonances, averages over
+quarter-decade energy bins (`libraries.bin_means`). `libraries.available()` lists them. Not every library is
+present for every reaction. Sources and caveats are in `data/README.md` and `scripts/build_library_curves.py`.
 For another reaction the curve has to be obtained from the library's own distribution and saved in the same format.
 
 ## Rules of the game
