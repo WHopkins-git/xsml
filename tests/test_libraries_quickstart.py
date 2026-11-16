@@ -6,7 +6,9 @@ from xsml import data, features, libraries, metrics, models, splits
 
 def test_shipped_library_curves():
     a = libraries.available()
-    assert set(a.library) == {"ENDF-B-VII.1", "ENDF-B-VIII.0", "JENDL-5"} and set(a.file) == {"Cl35_np.csv"}
+    assert set(a.library) == {"ENDF-B-VII.1", "ENDF-B-VIII.0", "JENDL-5"} and set(a.file) == {"Cl35_np.csv", "Fe56_ninl.csv", "Sm152_ng.csv"}
+    assert set(a.library[a.file == "Sm152_ng.csv"]) == {"ENDF-B-VIII.0"} and len(a[a.file == "Fe56_ninl.csv"]) == 3
+    a = a[a.file == "Cl35_np.csv"]
     c = libraries.curve("Cl-35", 103, "ENDF-B-VIII.0")
     assert c.energy_eV.is_monotonic_increasing and c.energy_eV.min() == 1e5 and c.energy_eV.max() == 2e7 and (c.sigma_b >= 0).all()
     assert len(libraries.curve("Cl-35", 103)) == a.points.sum()
@@ -21,6 +23,28 @@ def test_library_interpolation():
     mid = libraries.at([np.sqrt(e[i] * e[i + 1])], "JENDL-5")[0]
     assert min(c.sigma_b.iloc[i], c.sigma_b.iloc[i + 1]) <= mid <= max(c.sigma_b.iloc[i], c.sigma_b.iloc[i + 1])
     assert np.isnan(libraries.at([1.0, 3e7], "JENDL-5")).all()                 # outside 0.1 to 20 MeV
+
+
+def test_fe56_inelastic_and_sm152_capture_curves():
+    fe = libraries.curve("Fe-56", 4, "ENDF-B-VIII.0")
+    assert fe.energy_eV.is_monotonic_increasing and fe.energy_eV.max() == 2e7 and 8.6e5 < fe.energy_eV[fe.sigma_b > 0].min() < 8.7e5
+    assert np.isnan(libraries.at([5e5], "ENDF-B-VIII.0", "Fe-56", 4)[0])                      # below the inelastic threshold
+    assert 1.0 < libraries.at([5e6], "ENDF-B-VIII.0", "Fe-56", 4)[0] < 2.0                    # barns, plateau of the curve
+    sm = libraries.curve("Sm-152", 102)
+    assert set(sm.library) == {"ENDF-B-VIII.0"}
+    assert libraries.at([0.0253], "ENDF-B-VIII.0", "Sm-152", 102)[0] == pytest.approx(206.0, rel=0.01)   # thermal capture, barns
+    with pytest.raises(KeyError):
+        libraries.curve("Sm-152", 102, "JENDL-5")                                             # only bin averages are shipped for it
+
+
+def test_bin_means():
+    b = libraries.bin_means("Sm-152", 102)
+    assert set(b.library) == {"ENDF-B-VII.1", "ENDF-B-VIII.0", "JENDL-5"} and (b.e_high_eV > b.e_low_eV).all() and b.e_high_eV.max() == 2e7
+    one = libraries.bin_means("Sm-152", 102, "JENDL-5")
+    assert np.allclose(one.e_low_eV.to_numpy()[1:], one.e_high_eV.to_numpy()[:-1], rtol=1e-6)  # contiguous bins
+    assert np.allclose(np.log10(one.e_high_eV / one.e_low_eV).to_numpy()[:-1], 0.25, atol=1e-6)
+    with pytest.raises(FileNotFoundError):
+        libraries.bin_means("Cl-35", 103)
 
 
 def test_library_not_shipped():

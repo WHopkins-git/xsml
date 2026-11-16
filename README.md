@@ -17,7 +17,7 @@ The problem to be solved is stated in `briefs/`.
 | `xsml/metrics.py` | `rms_factor()`, `median_factor()`, `per_group()`, `cluster_bootstrap()`, `paired_comparison()`, `log_score()` |
 | `xsml/models.py` | `decision_tree()`, `random_forest()`, `xgboost()`, `cv_rmse()`, `tune()`, `nested_cv()` |
 | `xsml/importance.py` | `block_permutation()`, `drop_column()`, `shap_values()` |
-| `xsml/libraries.py` | `curve()`, `at()`, `available()`: evaluated-library curves (Cl-35 (n,p) only) |
+| `xsml/libraries.py` | `curve()`, `at()`, `bin_means()`, `available()`: the evaluated-library curves that are shipped (three reactions) |
 | `examples/` | two executed notebooks showing the functions in use on other reactions |
 | `briefs/` | the Cl-35 (n,p) brief and the milestones of the free project |
 | `docs/data_dictionary.md` | every column of the table |
@@ -83,10 +83,16 @@ The quickstart uses neutron capture so that it does not touch the reaction of th
 
 ## Evaluated libraries
 
-The repository does not contain evaluated libraries and does not process ENDF files. It ships pointwise curves
-for one reaction only: Cl-35 (n,p) from ENDF/B-VII.1, ENDF/B-VIII.0 and JENDL-5, from 0.1 to 20 MeV
-(`data/libraries/Cl35_np.csv`, provenance in `data/README.md`). For another reaction the curve has to be
-obtained from the library's own distribution and saved in the same format.
+The repository does not contain evaluated libraries and does not process ENDF files. It ships a few curves
+in `data/libraries/` (provenance and caveats in `data/README.md`):
+
+| Reaction | Pointwise curve (`libraries.curve`, `libraries.at`) | Averages over quarter-decade bins (`libraries.bin_means`) |
+|---|---|---|
+| Cl-35 (n,p) | ENDF/B-VII.1, ENDF/B-VIII.0, JENDL-5, 0.1 to 20 MeV | |
+| Fe-56 (n,n') | ENDF/B-VII.1, ENDF/B-VIII.0, JENDL-5, threshold to 20 MeV | |
+| Sm-152 (n,g) | ENDF/B-VIII.0, 1e-5 eV to 20 MeV | ENDF/B-VII.1, ENDF/B-VIII.0, JENDL-5 |
+
+For another reaction the curve has to be obtained from the library's own distribution and saved in the same format.
 
 ## Rules of the game
 
