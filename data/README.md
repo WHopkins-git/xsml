@@ -11,7 +11,7 @@
 
 ## Download
 
-**TODO(supervisor): insert the OneDrive link to `exfor_linted_v1.parquet` here and in the `download` field of `MANIFEST.json`.**
+
 
 Place the file in this folder. `xsml.data.load()` verifies it against `MANIFEST.json`:
 
