@@ -11,8 +11,25 @@ def test_shipped_library_curves():
     assert set(a.form[a.file.str.endswith("_bins.csv")]) == {"bin averages"} and set(a.form[~a.file.str.endswith("_bins.csv")]) == {"pointwise"}
     a = a[a.file == "Cl35_np.csv"]
     c = libraries.curve("Cl-35", 103, "ENDF-B-VIII.0")
-    assert c.energy_eV.is_monotonic_increasing and c.energy_eV.min() == 1e5 and c.energy_eV.max() == 2e7 and (c.sigma_b >= 0).all()
+    assert c.energy_eV.is_monotonic_increasing and c.energy_eV.min() == 1e-5 and c.energy_eV.max() == 2e7 and (c.sigma_b >= 0).all()
     assert len(libraries.curve("Cl-35", 103)) == a.points.sum()
+
+
+def test_cl35_np_curves_cover_the_full_range_of_the_evaluations():
+    """From 1e-5 eV (the lower limit of the files) to 20 MeV; 1/v below thermal; the points from 0.1 MeV are the NJOY ones."""
+    a = libraries.available()
+    a = a[a.file == "Cl35_np.csv"]
+    assert set(a.library) == {"ENDF-B-VII.1", "ENDF-B-VIII.0", "JENDL-5"} and (a.e_min_eV == 1e-5).all() and (a.e_max_eV == 2e7).all()
+    from_100_keV = {"ENDF-B-VII.1": 15483, "ENDF-B-VIII.0": 15525, "JENDL-5": 22911}
+    low = np.array([1e-5, 1e-4, 1e-3, 1e-2, 0.0253])
+    for lib, n in from_100_keV.items():
+        c = libraries.curve("Cl-35", 103, lib)
+        assert (c.energy_eV >= 1e5).sum() == n and (c.sigma_b[c.energy_eV < 1e5] > 0).all()
+        s = libraries.at(low, lib)
+        assert s[-1] == pytest.approx(0.479, rel=2e-3)                          # barns at 0.0253 eV, as calculated from each file
+        assert s * np.sqrt(low) == pytest.approx(s[-1] * np.sqrt(0.0253), rel=1e-3)   # 1/v: no threshold, positive Q-value
+        assert libraries.at([397.8154], lib)[0] > 50                            # the resonance at 398 eV is resolved
+        assert np.isnan(libraries.at([0.9e-5, 2.1e7], lib)).all()
 
 
 def test_library_interpolation():
@@ -23,7 +40,7 @@ def test_library_interpolation():
     assert libraries.at([e[i]], "JENDL-5")[0] == pytest.approx(c.sigma_b.iloc[i], rel=1e-6)
     mid = libraries.at([np.sqrt(e[i] * e[i + 1])], "JENDL-5")[0]
     assert min(c.sigma_b.iloc[i], c.sigma_b.iloc[i + 1]) <= mid <= max(c.sigma_b.iloc[i], c.sigma_b.iloc[i + 1])
-    assert np.isnan(libraries.at([1.0, 3e7], "JENDL-5")).all()                 # outside 0.1 to 20 MeV
+    assert np.isnan(libraries.at([5e-6, 3e7], "JENDL-5")).all()                # outside 1e-5 eV to 20 MeV
 
 
 def test_fe56_inelastic_and_sm152_capture_curves():

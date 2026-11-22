@@ -15,8 +15,9 @@ model code TALYS, not fitted to the measurements of the reaction concerned, and 
 proton-induced reactions up to 30 MeV, the range in which TENDL tabulates the channels one by one.
 
 Not every library is present for every reaction, and some pointwise curves of resonance reactions are thinned
-(they do not resolve every resonance). The sources and the checks are in ``scripts/build_library_curves.py``;
-a reaction is added there with one line.
+(they do not resolve every resonance). The curves of Cl-35 (n,p) run from 1e-5 eV to 20 MeV and are joined at
+0.1 MeV: at 0 K below it, Doppler broadened to 293.6 K from it. The sources and the checks are in
+``scripts/build_library_curves.py`` and ``data/README.md``; a reaction is added in the script with one line.
 """
 from __future__ import annotations
 

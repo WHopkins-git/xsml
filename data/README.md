@@ -42,11 +42,11 @@ M. Wang, W.J. Huang, F.G. Kondev, G. Audi and S. Naimi, Chinese Physics C 45, 03
 ## The library curves
 
 All files were written by `scripts/build_library_curves.py` from files on the supervisor's disk; nothing was
-computed beyond reading. Pointwise files have the columns `library`, `energy_eV`, `sigma_b`.
+computed beyond reading, except the part of the Cl-35 (n,p) curves of ENDF/B below 0.1 MeV (see the checks). Pointwise files have the columns `library`, `energy_eV`, `sigma_b`.
 
 | File | Content | Source and resolution |
 |---|---|---|
-| `libraries/Cl35_np.csv` | Cl-35 (n,p), MT 103, 0.1 to 20 MeV; ENDF/B-VII.1, ENDF/B-VIII.0, JENDL-5 | pointwise reconstruction with NJOY2016 (RECONR and BROADR, 293.6 K) from the supervisor's earlier work; 15,483 to 22,911 points per library |
+| `libraries/Cl35_np.csv` | Cl-35 (n,p), MT 103, 1e-5 eV to 20 MeV (the reaction has a positive Q-value and no threshold); ENDF/B-VII.1, ENDF/B-VIII.0, JENDL-5 | from 0.1 MeV: pointwise reconstruction with NJOY2016 (RECONR and BROADR, 293.6 K) from the supervisor's earlier work, 15,483 to 22,911 points per library. Below 0.1 MeV, at 0 K: JENDL-5 section MF 3 / MT 103 as filed (10,658 points); ENDF/B-VII.1 and ENDF/B-VIII.0 calculated from the resonance parameters of the files (5,182 points each), because their MF 3 holds only a placeholder there |
 | `libraries/Fe56_ninl.csv` | Fe-56 inelastic scattering, MT 4, threshold to 20 MeV; ENDF/B-VII.1, ENDF/B-VIII.0, JENDL-5 | section MF 3 / MT 4 of the ENDF-6 files as distributed (linear interpolation between points, 0 K, not Doppler broadened); 769, 2,925 and 7,504 points |
 | `libraries/Sm152_ng.csv` | Sm-152 (n,g), MT 102, 1e-5 eV to 20 MeV; ENDF/B-VIII.0 only | pointwise table retrieved earlier from the IAEA-NDS ENDF service, with the resonances reconstructed by that service; 21,413 points |
 | `libraries/Sm152_ng_bins.csv` | Sm-152 (n,g) averaged over bins of a quarter of a decade in energy; ENDF/B-VII.1, ENDF/B-VIII.0, JENDL-5 | NJOY2016 (RECONR and BROADR, 293.6 K), linear energy average of the cross section in each bin; columns `library`, `e_low_eV`, `e_high_eV`, `sigma_b`; the last bin ends at 20 MeV |
@@ -57,6 +57,18 @@ Checks made when the files were built:
   than 0.05 %, and its bin averages agree with the NJOY-processed ones to 0.02 dex. The inelastic threshold
   (0.862 MeV) lies above the resolved-resonance range of the files, so MF 3 is the complete cross section. The
   JENDL-5 section has small non-zero values below the threshold of the first level, from 0.105 MeV.
+* Cl-35 (n,p) below 0.1 MeV. The three files hold the same table of resonances up to 1.2 MeV (MF 2, R-matrix
+  limited format, Reich-Moore approximation, with a proton channel). JENDL-5 also gives the resulting curve in
+  MF 3 / MT 103; the two ENDF/B files give 1e-20 b there, and NJOY, which made the curves from 0.1 MeV, was not
+  available. The ENDF/B part was therefore calculated by the build script from the parameters (0 K, grid for
+  linear interpolation to 0.1 %). The same calculation with the JENDL-5 file reproduces the JENDL-5 MF 3 curve
+  below 0.1 MeV to 0.004 % (median; 0.5 % or better for 99 % of the points, up to 3 % next to the narrowest
+  resonances, where the seven-figure energies of the file do not resolve the peak), and the calculation agrees
+  with the NJOY curves of ENDF/B from 0.1 to 1 MeV to 0.01 % (median; the peaks differ because NJOY broadened
+  them to 293.6 K) and to 0.02 % at the join. At 0.0253 eV the three curves give 0.479 b; the comment sections
+  of the files state 0.480 b (ENDF/B, 0 K) and 0.47917 b (JENDL-5, 300 K). Below 0.0253 eV the curves follow
+  1/v to 0.03 %. The curves are not Doppler broadened below 0.1 MeV: the resonance at 398 eV is narrower and
+  higher than at room temperature. Fourteen energies of the JENDL-5 section are given twice (steps); they are kept.
 * Sm-152: the bin averages of the pointwise ENDF/B-VIII.0 curve agree with the NJOY-processed ones to 0.001 dex.
 
 Caveats:
