@@ -20,6 +20,7 @@ models, and three feature-importance tools. It is a toolkit, not a course. The n
 | `examples/` | two executed notebooks showing the functions in use on other reactions |
 | `docs/data_dictionary.md` | every column of the table |
 | `docs/conventions.md` | units, identifiers, dates, metrics, the fold rule |
+| `docs/choosing_a_split.md` | which question each split answers; when to hold out a whole isotope and when not |
 | `results/score_log.csv` | the score log: every score computed is appended here |
 | `data/` | `MANIFEST.json`, the AME2020 mass table, the library curves; the parquet is downloaded here |
 | `scripts/` | how the table and the library curves were built (needs sources that are not in this repository) |
