@@ -56,7 +56,7 @@ def fold_splits(df_or_ids, n_folds: int = 5, offset: int = 0) -> list[tuple[np.n
 
 def leave_one_isotope_out(df: pd.DataFrame, Z: int, A: int) -> tuple[np.ndarray, np.ndarray]:
     """``(train_mask, test_mask)``: every row of the target (Z, A), in any reaction, is test; all other rows are training."""
-    test = ((df["Z"] == Z) & (df["A"] == A)).to_numpy()
+    test = ((df["Z"] == Z) & (df["A"] == A)).to_numpy().copy()        # a copy: pandas 3 hands out read-only arrays
     if not test.any():
         raise ValueError(f"no rows for Z={Z}, A={A}")
     return ~test, test
@@ -64,7 +64,7 @@ def leave_one_isotope_out(df: pd.DataFrame, Z: int, A: int) -> tuple[np.ndarray,
 
 def leave_one_element_out(df: pd.DataFrame, Z: int) -> tuple[np.ndarray, np.ndarray]:
     """``(train_mask, test_mask)``: every row of the element Z, of any isotope and reaction, is test."""
-    test = (df["Z"] == Z).to_numpy()
+    test = (df["Z"] == Z).to_numpy().copy()
     if not test.any():
         raise ValueError(f"no rows for Z={Z}")
     return ~test, test
@@ -84,9 +84,9 @@ def holdout_by_date(df: pd.DataFrame, cutoff: str, where=None, date_col: str = "
     d = pd.to_datetime(df[date_col].astype(str), errors="coerce")
     if d.isna().any():
         raise ValueError(f"{int(d.isna().sum())} rows have no valid {date_col}")
-    test = (d >= pd.Timestamp(cutoff)).to_numpy()
+    test = (d >= pd.Timestamp(cutoff)).to_numpy().copy()
     if where is not None:
-        test &= np.asarray(where, dtype=bool)
+        test = test & np.asarray(where, dtype=bool)
     return ~test, test
 
 
