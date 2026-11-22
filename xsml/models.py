@@ -27,7 +27,7 @@ from sklearn.tree import DecisionTreeRegressor
 
 from .splits import fold_splits
 
-__all__ = ["decision_tree", "random_forest", "xgboost", "cv_rmse", "tune", "nested_cv"]
+__all__ = ["decision_tree", "random_forest", "xgboost", "log_weights", "cv_rmse", "tune", "nested_cv"]
 
 
 def decision_tree(**kwargs) -> DecisionTreeRegressor:
@@ -45,6 +45,34 @@ def xgboost(**kwargs):
     from xgboost import XGBRegressor
 
     return XGBRegressor(**{"n_estimators": 300, "max_depth": 6, "learning_rate": 0.05, "subsample": 0.8, "tree_method": "hist", "n_jobs": -1, "random_state": 0, **kwargs})
+
+
+def log_weights(df: pd.DataFrame, floor: float = 0.02) -> np.ndarray:
+    """Fitting weights for log10(sigma) from the reported uncertainties, one per row of ``df``, with mean 1.
+
+    The uncertainty of log10(sigma) is taken as ``(unc_b / sigma_b) / ln(10)`` and the weight as its inverse
+    square. The relative uncertainty is not allowed below ``floor`` (2 % by default): what an uncertainty includes
+    (statistical only, or total) is not recorded in the table, about one row in six with an uncertainty quotes less
+    than 2 %, and without a floor a few datasets that quote very small errors would carry the fit. Rows without a
+    usable uncertainty (missing, zero or negative; about 11 % of the kept rows) receive the median weight of the
+    other rows of their dataset, or, where the dataset has none, the median weight of the frame.
+
+    Pass the result as ``sample_weight`` to :func:`cv_rmse`, :func:`tune` or an estimator's ``fit``. Weighting is a
+    modelling choice to be declared; the uncertainty itself is not a model input (``xsml.data.check_inputs``).
+    Needs the columns ``sigma_b``, ``unc_b`` and ``dataset``.
+    """
+    if not 0 < floor:
+        raise ValueError("floor must be positive")
+    relative = (df["unc_b"] / df["sigma_b"]).to_numpy(dtype=float)
+    usable = np.isfinite(relative) & (relative > 0)
+    weight = np.full(len(df), np.nan)
+    weight[usable] = 1.0 / (np.maximum(relative[usable], floor) / np.log(10)) ** 2
+    if not usable.any():
+        return np.ones(len(df))
+    w = pd.Series(weight, index=df.index)
+    by_dataset = w.groupby(df["dataset"].astype(str), observed=True).transform("median")      # NaN where a dataset has no usable row
+    w = w.fillna(by_dataset).fillna(float(np.median(weight[usable])))
+    return (w / w.mean()).to_numpy()
 
 
 def _rows(X, idx):

@@ -88,3 +88,30 @@ def test_shap_values_add_up_to_the_prediction(make):
     assert list(sv.columns) == ["signal", "noise", "x", "base"]
     assert np.allclose(sv.sum(axis=1), m.predict(X.iloc[:25]), atol=1e-3)
     assert sv.signal.abs().mean() > sv.noise.abs().mean()
+
+
+def test_log_weights_known_values_clipping_and_missing():
+    df = pd.DataFrame({"dataset": ["a", "a", "a", "b", "b", "c"], "sigma_b": [1.0, 2.0, 1.0, 1.0, 1.0, 1.0],
+                       "unc_b": [0.10, 0.10, np.nan, 0.001, 0.0, np.nan]})
+    w = models.log_weights(df, floor=0.02)
+    raw = np.array([(np.log(10) / 0.10) ** 2, (np.log(10) / 0.05) ** 2, np.nan, (np.log(10) / 0.02) ** 2, np.nan, np.nan])   # 0.1 % is raised to the 2 % floor
+    raw[2] = np.median(raw[[0, 1]])                    # missing: median of the usable rows of dataset a
+    raw[4] = raw[3]                                    # zero uncertainty: median of dataset b, which has one usable row
+    raw[5] = np.median(raw[[0, 1, 3]])                 # dataset c has no usable row: median of the frame
+    assert np.allclose(w, raw / raw.mean())
+    assert w.mean() == pytest.approx(1.0) and (w > 0).all() and np.isfinite(w).all()
+    assert w[1] / w[0] == pytest.approx(4.0)           # half the relative uncertainty, four times the weight
+    assert w[3] / w[0] == pytest.approx(25.0)          # capped by the floor: (10 % / 2 %) squared, not (10 % / 0.1 %) squared
+    assert np.allclose(models.log_weights(df, floor=0.5), np.ones(6))        # everything at the floor: equal weights
+    nothing = models.log_weights(df.assign(unc_b=np.nan))
+    assert np.allclose(nothing, 1.0)
+    with pytest.raises(ValueError):
+        models.log_weights(df, floor=0)
+
+
+def test_log_weights_are_accepted_as_sample_weight(frame):
+    cv = splits.fold_splits(frame, 4)
+    w = models.log_weights(frame)
+    assert len(w) == len(frame) and w.mean() == pytest.approx(1.0)
+    score, oof = models.cv_rmse(models.decision_tree(min_samples_leaf=2), frame[FEATS], frame.log10_sigma, cv, sample_weight=w)
+    assert np.isfinite(oof).all() and score > 0

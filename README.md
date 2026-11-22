@@ -10,11 +10,11 @@ models, and three feature-importance tools. It is a toolkit, not a course. The n
 
 | Path | What it is |
 |---|---|
-| `xsml/data.py` | `load()` with a SHA-256 check, `select()`, `isotope_id()`, `datasets()` |
+| `xsml/data.py` | `load()` with a SHA-256 check, `select()`, `isotope_id()`, `datasets()`, `check_inputs()` |
 | `xsml/features.py` | `ame_table()`, `nuclide_features()`, `q_value()`, `reaction_q()`, `append()` |
 | `xsml/splits.py` | `isotope_folds()`, `fold_splits()`, `leave_one_isotope_out()`, `leave_one_element_out()`, `holdout_by_date()`, `assert_no_leakage()` |
 | `xsml/metrics.py` | `rms_factor()`, `median_factor()`, `per_group()`, `cluster_bootstrap()`, `paired_comparison()`, `log_score()` |
-| `xsml/models.py` | `decision_tree()`, `random_forest()`, `xgboost()`, `cv_rmse()`, `tune()`, `nested_cv()` |
+| `xsml/models.py` | `decision_tree()`, `random_forest()`, `xgboost()`, `cv_rmse()`, `tune()`, `nested_cv()`, `log_weights()` (fitting weights from the reported uncertainties) |
 | `xsml/importance.py` | `block_permutation()`, `drop_column()`, `shap_values()` |
 | `xsml/libraries.py` | `curve()`, `at()`, `bin_means()`, `available()`: the evaluated-library curves that are shipped |
 | `examples/` | two executed notebooks showing the functions in use on other reactions |
