@@ -17,10 +17,22 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
-__all__ = ["DATA_DIR", "DataFileError", "manifest", "sha256", "load", "isotope_id", "split_isotope_id", "select", "datasets"]
+__all__ = ["DATA_DIR", "VERDICT_COLUMNS", "UNCERTAINTY_COLUMNS", "DataFileError", "manifest", "sha256", "load", "isotope_id", "split_isotope_id", "select", "datasets", "check_inputs"]
 
 #: Folder holding MANIFEST.json and the downloaded parquet. Override with the environment variable XSML_DATA_DIR.
 DATA_DIR = Path(os.environ.get("XSML_DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
+
+
+#: Columns that hold a verdict on the data, not a property of the nucleus or of the measurement. They were computed
+#: on the whole table, by comparing each dataset with the other datasets of the same reaction, so they carry
+#: information about rows that may later be held out. They are not model inputs (see :func:`check_inputs`).
+VERDICT_COLUMNS = ["keep", "reason", "ds_flag", "ds_offset_dex", "ds_weight", "pt_outlier", "missing_uncertainty", "relative_uncertainty_flag",
+                   "uncertainty_unit_error", "critique_kind"]
+
+#: The reported uncertainty and the flags on it. An uncertainty is a statement about a measured value, known only
+#: where a measurement exists, so it is not a model input either; it can serve as a fitting weight
+#: (:func:`xsml.models.log_weights`).
+UNCERTAINTY_COLUMNS = ["unc_b", "missing_uncertainty", "relative_uncertainty_flag", "uncertainty_unit_error"]
 
 
 class DataFileError(RuntimeError):
@@ -152,3 +164,25 @@ def datasets(df: pd.DataFrame) -> pd.DataFrame:
     out["e_min_eV"] = g["energy_eV"].min()
     out["e_max_eV"] = g["energy_eV"].max()
     return out.reset_index()
+
+
+def check_inputs(columns) -> None:
+    """Raise ValueError if a verdict column or an uncertainty column is among the model inputs ``columns``.
+
+    ``columns`` is a list of column names or a DataFrame. The columns of :data:`VERDICT_COLUMNS` were computed with
+    the whole table in view, including rows that are later held out, and the columns of :data:`UNCERTAINTY_COLUMNS`
+    exist only where a measurement exists; a model that takes them as inputs cannot be used where it is needed and
+    is scored with information from its test rows. The check is never applied automatically: call it on the list
+    of features before fitting. Filtering or weighting the training rows by these columns is a different matter,
+    a modelling choice to be declared (see docs/conventions.md).
+    """
+    names = list(columns.columns) if isinstance(columns, pd.DataFrame) else list(columns)
+    verdict = [c for c in names if c in VERDICT_COLUMNS]
+    uncertainty = [c for c in names if c in UNCERTAINTY_COLUMNS and c not in VERDICT_COLUMNS]
+    if verdict or uncertainty:
+        parts = []
+        if verdict:
+            parts.append(f"verdict columns {verdict} (computed on the whole table, hold-out rows included)")
+        if uncertainty:
+            parts.append(f"uncertainty columns {uncertainty} (known only where a measurement exists)")
+        raise ValueError("not usable as model inputs: " + "; ".join(parts) + ". See docs/conventions.md, 'Verdict columns and leakage'.")

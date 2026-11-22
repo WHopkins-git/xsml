@@ -55,3 +55,17 @@ def test_select_by_target_and_reaction(toy):
 def test_datasets_summary(toy):
     d = data.datasets(data.select(toy, mt=103))
     assert len(d) == 12 and (d.points == 15).all() and {"author", "year", "entry_date", "ds_flag"} <= set(d.columns)
+
+
+def test_check_inputs_rejects_verdict_and_uncertainty_columns(toy):
+    data.check_inputs(["log10_energy", "Z", "N", "A", "S_n", "Q_reaction"])
+    data.check_inputs(toy[["Z", "A", "energy_eV"]])
+    with pytest.raises(ValueError, match="ds_offset_dex") as e:
+        data.check_inputs(["Z", "ds_offset_dex", "keep"])
+    assert "keep" in str(e.value) and "conventions.md" in str(e.value)
+    with pytest.raises(ValueError, match="unc_b"):
+        data.check_inputs(["Z", "unc_b"])
+    with pytest.raises(ValueError):
+        data.check_inputs(toy)                                      # the whole table holds both kinds
+    assert set(data.VERDICT_COLUMNS) <= set(toy.columns) and set(data.UNCERTAINTY_COLUMNS) <= set(toy.columns)
+    assert {"keep", "reason", "ds_flag", "ds_offset_dex", "ds_weight", "pt_outlier"} <= set(data.VERDICT_COLUMNS)

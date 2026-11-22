@@ -124,6 +124,16 @@ comparison (table of 2026-10-27) on a slightly different selection of data, join
 a low `ds_weight`). 3,352,465 kept rows have a `ds_weight` and 3,356,488 a `pt_outlier` (16,068 of them
 True); the rest are missing because the dataset or point was not in the earlier run.
 
+## Verdict columns are not model inputs
+
+The verdict columns above (`xsml.data.VERDICT_COLUMNS`) were computed on the whole table, each dataset against
+the other datasets of the same target and reaction. They are post-hoc: they are not to be given to a model as
+features, and neither is `unc_b` (`xsml.data.UNCERTAINTY_COLUMNS`); `xsml.data.check_inputs` tests a feature list
+for them. Filtering or weighting training rows by them, including the default `keep == True`, is a modelling
+choice to be declared, with a mild leakage caveat when datasets of the same reaction are held out. Columns safe
+as inputs: `Z`, `A`, `N`, projectile, `MT`, the incident energy and the AME-derived quantities of
+`xsml.features`. The reasoning is in `docs/conventions.md`, "Verdict columns and leakage".
+
 ## Columns added by the toolkit
 
 `features.append` adds `N`, `log10_energy`, `log10_sigma`, `Q_reaction` and the columns of
