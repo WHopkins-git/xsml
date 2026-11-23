@@ -185,4 +185,4 @@ def check_inputs(columns) -> None:
             parts.append(f"verdict columns {verdict} (computed on the whole table, hold-out rows included)")
         if uncertainty:
             parts.append(f"uncertainty columns {uncertainty} (known only where a measurement exists)")
-        raise ValueError("not usable as model inputs: " + "; ".join(parts) + ". See docs/conventions.md, 'Verdict columns and leakage'.")
+        raise ValueError("not usable as model inputs: " + "; ".join(parts) + ". See docs/conventions.md, 'Comparison columns and leakage'.")

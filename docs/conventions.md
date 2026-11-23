@@ -35,27 +35,35 @@ contained at a given moment, which is what a model trained at that moment could 
 * Folds: the distinct isotopes are sorted by Z and then A and dealt to the folds in turn (`splits.isotope_folds`). No random numbers are used, so the folds do not depend on the machine or on library versions.
 * `splits.assert_no_leakage(train, test, level)` is called on the frames that are fitted and scored. Levels: `isotope`, `element`, `dataset`, `entry`.
 
-## Verdict columns and leakage
+## Comparison columns and leakage
 
-The columns `keep`, `reason`, `ds_flag`, `ds_offset_dex`, `ds_weight`, `pt_outlier`, the three uncertainty flags
-and `critique_kind` (`xsml.data.VERDICT_COLUMNS`) are verdicts on the data. They were computed once, on the whole
-table. `ds_flag`, `ds_offset_dex` and `ds_weight` compare each dataset with the other datasets of the same
-target and reaction: the offset of a dataset is measured against a reference formed without that dataset, from
-the others. `pt_outlier` asks whether a point is corroborated by another dataset of the same reaction. Some
-`keep` verdicts (duplicates, superseded data) also depend on other datasets.
+The table carries two kinds of output of the linter, both computed once, on the whole table
+(`xsml.data.VERDICT_COLUMNS` lists them together).
 
-Two consequences follow.
+* **Removals:** `keep` and `reason`. They record which rows the linter did not retain as usable cross sections,
+  and why.
+* **Comparison labels:** `ds_flag`, `ds_offset_dex`, `ds_weight`, `pt_outlier`, the three uncertainty flags and
+  `critique_kind`. `ds_flag`, `ds_offset_dex` and `ds_weight` compare each dataset with the other datasets of the
+  same target and reaction; `pt_outlier` asks whether a point is corroborated by another dataset of the same
+  reaction. Nothing is removed on their account.
 
-* **They are not model inputs.** A verdict exists only where a measurement exists, and it was formed with every
-  dataset of the reaction in view, including any that are later held out. A model that takes a verdict column as
-  a feature is scored with information from its test rows and cannot be used for a nucleus without data.
+A flag says a dataset disagrees with the others, not that it is wrong; whether to trust it is a hypothesis to
+test, with scores on the full target.
+
+Two consequences follow for both kinds.
+
+* **They are not model inputs.** A label exists only where a measurement exists, and it was formed with every
+  dataset of the reaction in view, including any that are later held out. A model that takes such a column as a
+  feature is scored with information from its test rows and cannot be used for a nucleus without data.
   `xsml.data.check_inputs(features)` raises an error if such a column is in a feature list; it is not called
   automatically. The same holds for the reported uncertainty `unc_b` (`xsml.data.UNCERTAINTY_COLUMNS`).
 * **Filtering or weighting by them is a modelling choice, to be declared.** This includes the default
-  `keep == True` of `data.load()`. There is a mild caveat: the verdict on a training dataset of a reaction was
+  `keep == True` of `data.load()`. There is a mild caveat: the label of a training dataset of a reaction was
   formed with the held-out datasets of that same reaction among its comparators. Datasets of other targets and
   reactions are not affected. Where the held-out datasets are the only neighbours of each other, their own flags
-  say only that they disagree with one another. Verdicts are not applied to hold-out rows.
+  say only that they disagree with one another. The test rows are never selected by these columns: a test set
+  from which the flagged datasets have been taken out is an easier test, not a cleaner one. Score the whole
+  target, and look at the score dataset by dataset.
 
 Columns that are safe as inputs are those that describe the nucleus and the conditions of the reaction, known
 without any measurement: `Z`, `A`, `N`, the projectile and the reaction (`MT`), the incident energy, and the

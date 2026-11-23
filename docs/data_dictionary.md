@@ -8,7 +8,7 @@ The table holds cross sections (EXFOR quantity `SIG`) for incident n, p, d, t, h
 isotopic targets, with positive values. Natural-element targets are not in the table.
 
 Values are as compiled in EXFOR and converted by the X4Pro database, except the energy, which carries the
-linter's frame corrections (column `energy_frame`). The table is not cleaned beyond the `keep` verdict:
+linter's frame corrections (column `energy_frame`). The table is not cleaned beyond the linter's removals (`keep`):
 expect extreme values (kept energies range from 6e-10 eV to 4e11 eV, kept cross sections from 1e-32 b to
 2e8 b), zero or negative uncertainties in a few thousand rows, and bibliographic oddities (the smallest
 `year` is 1900).
@@ -97,17 +97,19 @@ Consequences for use:
 | `sigma_b` | float | Cross section in barns for kept rows. For rows with `keep == False` the number may be another quantity or in another unit. |
 | `unc_b` | float | Uncertainty of the cross section as given by X4Pro, in barns; NaN where none is available (about 11 % of kept rows). What the uncertainty includes (statistical, systematic, total) differs between datasets and is not recorded here. |
 
-## Verdicts of the linter
+## Outputs of the linter: removals and comparison labels
 
 The linter is the supervisor's tool for checking EXFOR cross sections. These columns say what it concluded,
-not how. They are outputs of a model of the data, not ground truth: a flagged dataset can be right and its
-neighbours wrong.
+not how. They are of two kinds. `keep` and `reason` are its **removals**: which rows it did not retain as
+usable cross sections. The other columns are **comparison labels**: how a dataset or a point compares with the
+other data of the same reaction, or what its record says about its uncertainty. Nothing is removed on account
+of a comparison label, and a label is not ground truth: a flagged dataset can be right and its neighbours wrong.
 
 | Column | Type | Meaning |
 |---|---|---|
 | `keep` | bool | True if the linter retained the row as a usable cross section in barns against an incident energy. |
 | `reason` | text | `kept`, or the linter's label for why the row was not retained (`class rule`, `modifier rule`, `unit rule`, `superseded rule`, `duplicate rule`, `duplicate entry`, `limit rule`, `outdated, ...`, `known issue: ...`). |
-| `ds_flag` | text | Verdict on the dataset from a comparison with the other datasets of the same reaction: `ok`, `normalisation` (the dataset is offset from the others), `shape` (its energy dependence differs), `normalisation+shape`, or `unassessable` (too few other datasets overlap it for a judgement; this means "cannot judge", not "fine"). Constant within a dataset. Present for every kept row; null for most rows that were not kept. |
+| `ds_flag` | text | Label of the dataset from a comparison with the other datasets of the same reaction: `ok`, `normalisation` (the dataset is offset from the others), `shape` (its energy dependence differs), `normalisation+shape`, or `unassessable` (too few other datasets overlap it for a judgement; this means "cannot judge", not "fine"). Constant within a dataset. Present for every kept row; null for most rows that were not kept. |
 | `ds_offset_dex` | float | Offset of the dataset from the others, in log10 units; positive means the dataset is higher. NaN where no offset could be formed. Constant within a dataset. |
 | `ds_weight` | float | A suggested fitting weight for the dataset, between 0 and 1: lower for datasets that would need a larger added uncertainty to agree with the others, 1 for datasets that could not be judged. Constant within a dataset. See the note below. |
 | `pt_outlier` | bool or missing | True if the single point was flagged as a spike relative to the other data of its reaction. See the note below. |
@@ -124,15 +126,16 @@ comparison (table of 2026-10-27) on a slightly different selection of data, join
 a low `ds_weight`). 3,352,465 kept rows have a `ds_weight` and 3,356,488 a `pt_outlier` (16,068 of them
 True); the rest are missing because the dataset or point was not in the earlier run.
 
-## Verdict columns are not model inputs
+## These columns are not model inputs
 
-The verdict columns above (`xsml.data.VERDICT_COLUMNS`) were computed on the whole table, each dataset against
-the other datasets of the same target and reaction. They are post-hoc: they are not to be given to a model as
-features, and neither is `unc_b` (`xsml.data.UNCERTAINTY_COLUMNS`); `xsml.data.check_inputs` tests a feature list
-for them. Filtering or weighting training rows by them, including the default `keep == True`, is a modelling
-choice to be declared, with a mild leakage caveat when datasets of the same reaction are held out. Columns safe
-as inputs: `Z`, `A`, `N`, projectile, `MT`, the incident energy and the AME-derived quantities of
-`xsml.features`. The reasoning is in `docs/conventions.md`, "Verdict columns and leakage".
+The removals and the comparison columns above (`xsml.data.VERDICT_COLUMNS`) were computed on the whole table,
+the comparison columns by setting each dataset against the other datasets of the same target and reaction. They
+are post-hoc: they are not to be given to a model as features, and neither is `unc_b`
+(`xsml.data.UNCERTAINTY_COLUMNS`); `xsml.data.check_inputs` tests a feature list for them. Filtering or weighting
+training rows by them, including the default `keep == True`, is a modelling choice to be declared, with a mild
+leakage caveat when datasets of the same reaction are held out; test rows are never selected by them. Columns
+safe as inputs: `Z`, `A`, `N`, projectile, `MT`, the incident energy and the AME-derived quantities of
+`xsml.features`. The reasoning is in `docs/conventions.md`, "Comparison columns and leakage".
 
 ## Columns added by the toolkit
 

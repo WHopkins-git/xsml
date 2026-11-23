@@ -75,10 +75,10 @@ The quickstart uses neutron capture so that it does not touch the reaction of th
 ## What the loader does and does not do
 
 * `data.load()` returns the rows with `keep == True`: the rows the linter retained. This is the only default selection.
-* The linter's verdict columns (`ds_flag`, `ds_offset_dex`, `ds_weight`, `pt_outlier` and the uncertainty flags) are returned untouched. Whether to filter on them, weight by them or ignore them is a modelling decision, to be stated and tested.
+* The linter's comparison columns (`ds_flag`, `ds_offset_dex`, `ds_weight`, `pt_outlier` and the uncertainty flags) are returned untouched. They label how a dataset or a point compares with the others; they are distinct from `keep` and `reason`, which record what the linter removed. A flag says a dataset disagrees with the others, not that it is wrong; whether to trust it is a hypothesis to test, with scores on the full target. Whether to filter on them, weight by them or ignore them is a modelling decision, to be stated and tested.
 * `data.load(kept_only=False)` returns every row, with the reason for which a row was not retained. Rows that were not retained include values that are not cross sections in barns; they are for inspection, not for training without thought.
 * Natural-element targets are not in the table. Every row has an isotopic target.
-* How the linter reaches its verdicts is not documented here. It will be demonstrated separately.
+* How the linter reaches its removals and its comparison labels is not documented here. It will be demonstrated separately.
 
 ## Evaluated libraries
 
